@@ -1,0 +1,49 @@
+{
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:turborepo.dev)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "WebFetch(domain:orm.drizzle.team)",
+      "WebFetch(domain:eslint.org)",
+      "WebFetch(domain:v3.shadcn.com)",
+      "Bash(pnpm setup:*)",
+      "Bash(pnpm run setup:*)",
+      "Bash(pnpm help:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm lint:*)",
+      "WebFetch(domain:www.remotion.dev)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(npm view:*)",
+      "Bash(pnpm --filter @repo/video build:*)",
+      "Bash(pnpm --filter @repo/video test:*)",
+      "Bash(pnpm studio:*)",
+      "Bash(pnpm new-video:*)",
+      "Bash(pnpm --version:*)",
+      "Bash(pnpm run:*)",
+      "Bash(node scripts/check-setup.mjs:*)",
+      "Bash(echo:*)",
+      "WebFetch(domain:ai-sdk.dev)",
+      "WebFetch(domain:elements.ai-sdk.dev)",
+      "Bash(pnpm --filter @repo/db test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(grep:*)",
+      "Bash(pnpm --filter @repo/ui build:*)",
+      "Bash(git stash:*)",
+      "Bash(pnpm --filter @repo/web build:*)",
+      "Bash(pnpm --filter @repo/web tsc:*)",
+      "Bash(npx tsc:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm --filter @repo/web test:*)",
+      "Bash(pnpm --filter @repo/ui test:*)",
+      "Bash(pnpm --filter @repo/server test)",
+      "Bash(pnpm --filter @repo/server exec vitest run:*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  }
+}
