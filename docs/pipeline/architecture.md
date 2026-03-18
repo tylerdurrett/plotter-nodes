@@ -137,6 +137,7 @@ class ContourConfig:
     band_width: float | None = None
     contour_thickness: int = 1
     epsilon_factor: float = 0.005
+    smooth_contour: bool = True  # Gaussian blur on SDF for rounder contours
     output_dir: str = "output"
 ```
 

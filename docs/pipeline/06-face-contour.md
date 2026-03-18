@@ -205,6 +205,9 @@ uv run python scripts/run_pipeline.py contour image.jpg --contour-method segment
 # Average of all three methods
 uv run python scripts/run_pipeline.py contour image.jpg --contour-method average
 
+# Disable contour smoothing (sharper, more angular edges)
+uv run python scripts/run_pipeline.py contour image.jpg --no-smooth
+
 # Adjust contour simplification
 uv run python scripts/run_pipeline.py contour image.jpg --contour-method segmentation_face --epsilon-factor 0.01
 ```
@@ -295,6 +298,7 @@ output/<image_name>/contour/
 | `band_width` | float \| None | None | Band width for band mode (pixels) |
 | `contour_thickness` | int | 1 | Contour line thickness (pixels) |
 | `epsilon_factor` | float | 0.005 | Contour simplification for segmentation methods (0 to disable) |
+| `smooth_contour` | bool | True | Smooth contour via Gaussian blur on the signed distance field for rounder edges |
 | `output_dir` | str | "output" | Base output directory |
 
 ### RemapConfig Integration
