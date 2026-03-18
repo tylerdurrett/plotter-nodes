@@ -67,17 +67,19 @@ plotter-nodes/
 
 ### 1.1 pyproject.toml & Package Skeleton
 
-- [ ] Create `pyproject.toml` with:
+- [x] Create `pyproject.toml` with:
   - Project metadata (name: `portrait-map-lab`, version: `0.1.0`, requires-python: `>=3.10`)
   - Dependencies: `mediapipe`, `opencv-python`, `numpy`, `scipy`, `matplotlib`
   - Dev dependencies group: `pytest`, `ruff`
   - `[tool.ruff]` config: target Python 3.10, line-length 99, enable isort rules
   - `[tool.pytest.ini_options]` config: `testpaths = ["tests"]`
   - `[build-system]` using `hatchling` (modern, minimal build backend)
-- [ ] Create `src/portrait_map_lab/__init__.py` with package version and top-level docstring
-- [ ] Create `src/portrait_map_lab/py.typed` (empty marker file for PEP 561)
-- [ ] Create `tests/__init__.py` (empty)
-- [ ] Create `tests/conftest.py` with a placeholder fixture comment
+- [x] Create `src/portrait_map_lab/__init__.py` with package version and top-level docstring
+- [x] Create `src/portrait_map_lab/py.typed` (empty marker file for PEP 561)
+- [x] Create `tests/__init__.py` (empty)
+- [x] Create `tests/conftest.py` with a placeholder fixture comment
+
+> **Note:** Build backend is `hatchling.build` (not `hatchling.backends` as sometimes seen in examples). All 5 acceptance criteria verified passing.
 
 **Acceptance Criteria:**
 - `uv sync` installs all dependencies into a venv without errors
