@@ -405,34 +405,45 @@ docs/
 
 ### 6.1 Add complexity subcommand to run_pipeline.py
 
-- [ ] Add `complexity` subparser with arguments:
+- [x] Add `complexity` subparser with arguments:
   - `--metric` (choices: `gradient`, `laplacian`, `multiscale_gradient`, default: `gradient`)
   - `--complexity-sigma` (float, default: 3.0)
   - `--scales` (float, nargs="+", default: [1.0, 3.0, 8.0])
   - `--scale-weights` (float, nargs="+", default: [0.5, 0.3, 0.2])
   - `--normalize-percentile` (float, default: 99.0)
   - `--mask-image` (Path, optional)
-- [ ] Implement `handle_complexity` function following existing handler pattern
-- [ ] Add `build_complexity_config(args) -> ComplexityConfig` helper
+- [x] Implement `handle_complexity` function following existing handler pattern
+- [x] Add `build_complexity_config(args) -> ComplexityConfig` helper
 
 **Acceptance Criteria:**
-- `uv run python scripts/run_pipeline.py complexity test_images/20230427-171404.JPG` writes to `output/20230427-171404/complexity/`
-- `uv run python scripts/run_pipeline.py complexity --metric laplacian test_images/20230427-171404.JPG` uses Laplacian
-- `uv run python scripts/run_pipeline.py complexity --help` shows args
+- `uv run python scripts/run_pipeline.py complexity test_images/20230427-171404.JPG` writes to `output/20230427-171404/complexity/` ✅
+- `uv run python scripts/run_pipeline.py complexity --metric laplacian test_images/20230427-171404.JPG` uses Laplacian ✅
+- `uv run python scripts/run_pipeline.py complexity --help` shows args ✅
 
 ### 6.2 Integrate complexity into flow and all subcommands
 
-- [ ] Add to `flow` subparser: `--metric`, `--complexity-sigma`, `--speed-min`, `--speed-max` — when metric is provided, compute complexity and derive speed
-- [ ] Add to `all` subparser: same complexity args plus `--speed-min`, `--speed-max`
-- [ ] Update `handle_flow` to optionally run complexity pipeline and pass to flow
-- [ ] Update `handle_all` to optionally run complexity pipeline
-- [ ] When `--metric` is not provided in `flow` or `all`, complexity is skipped (current behavior preserved)
+- [x] Add to `flow` subparser: `--metric`, `--complexity-sigma`, `--speed-min`, `--speed-max` — when metric is provided, compute complexity and derive speed
+- [x] Add to `all` subparser: same complexity args plus `--speed-min`, `--speed-max`
+- [x] Update `handle_flow` to optionally run complexity pipeline and pass to flow
+- [x] Update `handle_all` to optionally run complexity pipeline
+- [x] When `--metric` is not provided in `flow` or `all`, complexity is skipped (current behavior preserved)
 
 **Acceptance Criteria:**
-- `uv run python scripts/run_pipeline.py flow test_images/20230427-171404.JPG` (no complexity args) — current behavior, no speed output
-- `uv run python scripts/run_pipeline.py flow --metric gradient test_images/20230427-171404.JPG` — computes complexity, produces flow_speed
-- `uv run python scripts/run_pipeline.py all --metric gradient test_images/20230427-171404.JPG` — includes complexity and flow speed
-- `uv run python scripts/run_pipeline.py all test_images/20230427-171404.JPG` — identical to current, no complexity
+- `uv run python scripts/run_pipeline.py flow test_images/20230427-171404.JPG` (no complexity args) — current behavior, no speed output ✅
+- `uv run python scripts/run_pipeline.py flow --metric gradient test_images/20230427-171404.JPG` — computes complexity, produces flow_speed ✅
+- `uv run python scripts/run_pipeline.py all --metric gradient test_images/20230427-171404.JPG` — includes complexity and flow speed ✅
+- `uv run python scripts/run_pipeline.py all test_images/20230427-171404.JPG` — identical to current, no complexity ✅
+
+**Implementation Notes:**
+- Phase 6 completed successfully (2026-03-18)
+- Added ComplexityConfig, FlowSpeedConfig imports and run_complexity_pipeline, save_complexity_outputs functions
+- Created build_complexity_config and build_flow_speed_config helper functions
+- Added comprehensive handle_complexity function with detailed output summary
+- Updated handle_flow to optionally compute complexity when --metric is provided
+- Updated handle_all to build complexity_config when metric is specified
+- Added scales and scale_weights arguments to all relevant parsers
+- All tests pass, backward compatibility maintained
+- Code quality verified with ruff (all checks passing)
 
 ---
 

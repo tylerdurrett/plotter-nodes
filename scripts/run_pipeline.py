@@ -9,11 +9,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import cv2
+
 from portrait_map_lab.models import (
+    ComplexityConfig,
     ComposeConfig,
     ContourConfig,
     ETFConfig,
     FlowConfig,
+    FlowSpeedConfig,
     LICConfig,
     LuminanceConfig,
     PipelineConfig,
@@ -21,11 +25,13 @@ from portrait_map_lab.models import (
 )
 from portrait_map_lab.pipelines import (
     run_all_pipelines,
+    run_complexity_pipeline,
     run_contour_pipeline,
     run_density_pipeline,
     run_feature_distance_pipeline,
     run_flow_pipeline,
     save_all_outputs,
+    save_complexity_outputs,
     save_contour_outputs,
     save_density_outputs,
     save_flow_outputs,
@@ -301,6 +307,102 @@ def parse_args() -> argparse.Namespace:
         default=42,
         help="Random seed for LIC noise texture",
     )
+    # Complexity arguments (optional - only used when --metric is provided)
+    flow_parser.add_argument(
+        "--metric",
+        type=str,
+        choices=["gradient", "laplacian", "multiscale_gradient"],
+        default=None,
+        help="Optional complexity metric to compute for flow speed modulation",
+    )
+    flow_parser.add_argument(
+        "--complexity-sigma",
+        type=float,
+        default=3.0,
+        help="Gaussian smoothing sigma for single-scale complexity metrics",
+    )
+    flow_parser.add_argument(
+        "--scales",
+        type=float,
+        nargs="+",
+        default=[1.0, 3.0, 8.0],
+        help="Sigma values for multiscale complexity metric",
+    )
+    flow_parser.add_argument(
+        "--scale-weights",
+        type=float,
+        nargs="+",
+        default=[0.5, 0.3, 0.2],
+        help="Weights for each scale in multiscale complexity metric",
+    )
+    flow_parser.add_argument(
+        "--normalize-percentile",
+        type=float,
+        default=99.0,
+        help="Percentile for complexity normalization (100.0 = max normalization)",
+    )
+    flow_parser.add_argument(
+        "--speed-min",
+        type=float,
+        default=0.3,
+        help="Flow speed in most complex areas (when complexity is enabled)",
+    )
+    flow_parser.add_argument(
+        "--speed-max",
+        type=float,
+        default=1.0,
+        help="Flow speed in smooth areas (when complexity is enabled)",
+    )
+
+    # Complexity subcommand (complexity map pipeline)
+    complexity_parser = subparsers.add_parser(
+        "complexity",
+        help="Run complexity map pipeline for flow speed modulation",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    complexity_parser.add_argument(
+        "image_path", type=Path, help="Path to the input portrait image"
+    )
+    add_shared_arguments(complexity_parser)
+    complexity_parser.add_argument(
+        "--metric",
+        type=str,
+        choices=["gradient", "laplacian", "multiscale_gradient"],
+        default="gradient",
+        help="Complexity metric to compute",
+    )
+    complexity_parser.add_argument(
+        "--complexity-sigma",
+        type=float,
+        default=3.0,
+        help="Gaussian smoothing sigma for single-scale metrics",
+    )
+    complexity_parser.add_argument(
+        "--scales",
+        type=float,
+        nargs="+",
+        default=[1.0, 3.0, 8.0],
+        help="Sigma values for multiscale metric",
+    )
+    complexity_parser.add_argument(
+        "--scale-weights",
+        type=float,
+        nargs="+",
+        default=[0.5, 0.3, 0.2],
+        help="Weights for each scale in multiscale metric",
+    )
+    complexity_parser.add_argument(
+        "--normalize-percentile",
+        type=float,
+        default=99.0,
+        help="Percentile for normalization (100.0 = max normalization)",
+    )
+    complexity_parser.add_argument(
+        "--mask-image",
+        type=Path,
+        default=None,
+        help="Optional mask image to restrict complexity computation",
+    )
 
     # All subcommand (runs all pipelines)
     all_parser = subparsers.add_parser(
@@ -452,6 +554,52 @@ def parse_args() -> argparse.Namespace:
         default=42,
         help="Random seed for LIC noise texture",
     )
+    # Complexity arguments (optional - only used when --metric is provided)
+    all_parser.add_argument(
+        "--metric",
+        type=str,
+        choices=["gradient", "laplacian", "multiscale_gradient"],
+        default=None,
+        help="Optional complexity metric to compute for flow speed modulation",
+    )
+    all_parser.add_argument(
+        "--complexity-sigma",
+        type=float,
+        default=3.0,
+        help="Gaussian smoothing sigma for single-scale complexity metrics",
+    )
+    all_parser.add_argument(
+        "--scales",
+        type=float,
+        nargs="+",
+        default=[1.0, 3.0, 8.0],
+        help="Sigma values for multiscale complexity metric",
+    )
+    all_parser.add_argument(
+        "--scale-weights",
+        type=float,
+        nargs="+",
+        default=[0.5, 0.3, 0.2],
+        help="Weights for each scale in multiscale complexity metric",
+    )
+    all_parser.add_argument(
+        "--normalize-percentile",
+        type=float,
+        default=99.0,
+        help="Percentile for complexity normalization (100.0 = max normalization)",
+    )
+    all_parser.add_argument(
+        "--speed-min",
+        type=float,
+        default=0.3,
+        help="Flow speed in most complex areas (when complexity is enabled)",
+    )
+    all_parser.add_argument(
+        "--speed-max",
+        type=float,
+        default=1.0,
+        help="Flow speed in smooth areas (when complexity is enabled)",
+    )
     # Export bundle
     all_parser.add_argument(
         "--export",
@@ -481,6 +629,54 @@ def build_remap_config(args: argparse.Namespace) -> RemapConfig:
         sigma=args.sigma,
         tau=args.tau,
         clamp_distance=args.clamp_distance,
+    )
+
+
+def build_complexity_config(args: argparse.Namespace) -> ComplexityConfig | None:
+    """Build ComplexityConfig from command-line arguments.
+
+    Parameters
+    ----------
+    args
+        Parsed command-line arguments.
+
+    Returns
+    -------
+    ComplexityConfig | None
+        Complexity configuration if metric is specified, None otherwise.
+    """
+    if not hasattr(args, "metric") or args.metric is None:
+        return None
+
+    return ComplexityConfig(
+        metric=args.metric,
+        sigma=args.complexity_sigma,
+        scales=args.scales,
+        scale_weights=args.scale_weights,
+        normalize_percentile=args.normalize_percentile,
+        output_dir=str(args.output_dir),
+    )
+
+
+def build_flow_speed_config(args: argparse.Namespace) -> FlowSpeedConfig | None:
+    """Build FlowSpeedConfig from command-line arguments.
+
+    Parameters
+    ----------
+    args
+        Parsed command-line arguments.
+
+    Returns
+    -------
+    FlowSpeedConfig | None
+        Flow speed configuration if speed args are present, None otherwise.
+    """
+    if not hasattr(args, "speed_min"):
+        return None
+
+    return FlowSpeedConfig(
+        speed_min=args.speed_min,
+        speed_max=args.speed_max,
     )
 
 
@@ -721,9 +917,7 @@ def handle_density(
 
     # Run density pipeline
     logger.info("Running density composition...")
-    density_result = run_density_pipeline(
-        image, features_result, contour_result, compose_config
-    )
+    density_result = run_density_pipeline(image, features_result, contour_result, compose_config)
 
     # Save density outputs
     logger.info("Saving density outputs...")
@@ -799,6 +993,19 @@ def handle_flow(
     )
     contour_result = run_contour_pipeline(image, contour_config)
 
+    # Optionally run complexity pipeline if metric is specified
+    complexity_result = None
+    speed_config = None
+    if args.metric is not None:
+        logger.info("Running complexity pipeline for flow speed modulation...")
+        complexity_config = build_complexity_config(args)
+        # Use contour filled mask to restrict complexity to face region
+        mask = contour_result.filled_mask if contour_result.filled_mask is not None else None
+        complexity_result = run_complexity_pipeline(image, complexity_config, mask)
+        speed_config = build_flow_speed_config(args)
+        # Save complexity outputs in parent dir
+        save_complexity_outputs(complexity_result, output_dir.parent, image)
+
     # Build flow config
     etf_config = ETFConfig(
         blur_sigma=args.blur_sigma,
@@ -815,9 +1022,11 @@ def handle_flow(
         fallback_threshold=args.fallback_threshold,
     )
 
-    # Run flow pipeline (LIC is computed inside run_flow_pipeline)
+    # Run flow pipeline with optional complexity for speed
     logger.info("Running flow field computation...")
-    flow_result = run_flow_pipeline(image, contour_result, flow_config)
+    flow_result = run_flow_pipeline(
+        image, contour_result, flow_config, complexity_result, speed_config
+    )
 
     # Save flow outputs
     logger.info("Saving flow outputs...")
@@ -851,6 +1060,99 @@ def handle_flow(
     print(f"  - Fallback threshold: {args.fallback_threshold}")
     print(f"  - LIC length: {args.lic_length}")
     print(f"  - LIC seed: {args.lic_seed}")
+    if complexity_result is not None:
+        print("\nComplexity-based flow speed:")
+        print(f"  - Metric: {args.metric}")
+        print(f"  - Speed range: {args.speed_min:.1f} to {args.speed_max:.1f}")
+        print("  - flow_speed.png and flow_speed_raw.npy saved")
+    print("=" * 60)
+
+    return 0
+
+
+def handle_complexity(
+    args: argparse.Namespace, image: Path, image_name: str, logger: logging.Logger
+) -> int:
+    """Handle the complexity subcommand.
+
+    Parameters
+    ----------
+    args
+        Parsed command-line arguments.
+    image
+        Loaded input image.
+    image_name
+        Name of the image file (without extension).
+    logger
+        Logger instance.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success, 1 for error).
+    """
+    height, width = image.shape[:2]
+    logger.info("Running complexity map pipeline...")
+
+    # Create output directory
+    output_dir = ensure_output_dir(args.output_dir, image_name, pipeline="complexity")
+    logger.info("Output directory: %s", output_dir)
+
+    # Build complexity configuration
+    config = ComplexityConfig(
+        metric=args.metric,
+        sigma=args.complexity_sigma,
+        scales=args.scales,
+        scale_weights=args.scale_weights,
+        normalize_percentile=args.normalize_percentile,
+        output_dir=str(output_dir),
+    )
+
+    # Load mask image if provided
+    mask = None
+    if args.mask_image is not None and args.mask_image.exists():
+        logger.info("Loading mask image: %s", args.mask_image)
+        mask = load_image(args.mask_image)
+        # Convert to grayscale if needed
+        if len(mask.shape) == 3:
+            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+
+    # Run complexity pipeline
+    logger.info("Computing %s complexity map...", config.metric)
+    result = run_complexity_pipeline(image, config, mask)
+
+    # Save complexity outputs
+    logger.info("Saving complexity outputs...")
+    parent_dir = output_dir.parent
+    save_complexity_outputs(result, parent_dir, image)
+
+    # Print summary
+    print("\n" + "=" * 60)
+    print("COMPLEXITY PIPELINE COMPLETED SUCCESSFULLY")
+    print("=" * 60)
+    print(f"Input image: {args.image_path}")
+    print(f"Image dimensions: {width}x{height}")
+    print(f"Output directory: {parent_dir / 'complexity'}")
+    print("\nFiles created:")
+    print(f"  - {args.metric}_energy.png (raw complexity heatmap)")
+    print(f"  - {args.metric}_energy_raw.npy (raw complexity array)")
+    print("  - complexity.png (normalized complexity heatmap)")
+    print("  - complexity_raw.npy (normalized complexity array)")
+    print("  - contact_sheet.png (all visualizations)")
+    print("\nConfiguration used:")
+    print(f"  - Metric: {args.metric}")
+    if args.metric in ["gradient", "laplacian"]:
+        print(f"  - Sigma: {args.complexity_sigma}")
+    elif args.metric == "multiscale_gradient":
+        print(f"  - Scales: {args.scales}")
+        print(f"  - Scale weights: {args.scale_weights}")
+    print(f"  - Normalize percentile: {args.normalize_percentile}")
+    if args.mask_image:
+        print(f"  - Mask image: {args.mask_image}")
+    print("\nComplexity statistics:")
+    print(f"  - Min complexity: {result.complexity.min():.3f}")
+    print(f"  - Max complexity: {result.complexity.max():.3f}")
+    print(f"  - Mean complexity: {result.complexity.mean():.3f}")
     print("=" * 60)
 
     return 0
@@ -944,6 +1246,10 @@ def handle_all(
         use_bilinear=True,  # default
     )
 
+    # Build complexity and speed configs if metric is specified
+    complexity_config = build_complexity_config(args)
+    speed_config = build_flow_speed_config(args) if complexity_config else None
+
     # Run all pipelines with shared landmarks
     logger.info("Running complete pipeline with shared landmarks...")
     result = run_all_pipelines(
@@ -953,6 +1259,8 @@ def handle_all(
         compose_config,
         flow_config,
         lic_config,
+        complexity_config,
+        speed_config,
     )
 
     # Save all outputs
@@ -990,6 +1298,16 @@ def handle_all(
     print(f"  Refinement: sigma={args.refine_sigma}, iter={args.refine_iterations}")
     print(f"  Blending: coherence^{args.coherence_power}, fallback={args.fallback_threshold}")
     print(f"  LIC: length={args.lic_length}, seed={args.lic_seed}")
+    if complexity_config is not None:
+        print("\n--- Stage 5: Complexity Map ---")
+        print(f"  Output directory: {base_output_dir / 'complexity'}")
+        print("  Files created: complexity maps, flow speed modulation")
+        print(f"  Metric: {args.metric}")
+        if args.metric in ["gradient", "laplacian"]:
+            print(f"  Sigma: {args.complexity_sigma}")
+        elif args.metric == "multiscale_gradient":
+            print(f"  Scales: {args.scales}")
+        print(f"  Speed range: {args.speed_min:.1f} to {args.speed_max:.1f}")
     print("\nShared configuration:")
     print(f"  - Remap curve: {args.curve}")
     if args.curve == "linear":
@@ -1000,16 +1318,15 @@ def handle_all(
         print(f"  - Tau: {args.tau}")
     print(f"  - Clamp distance: {args.clamp_distance}")
     print("\n✓ Landmarks detected once and shared across all pipelines")
-    print("✓ All 4 pipeline stages completed successfully")
+    stages = 5 if complexity_config else 4
+    print(f"✓ All {stages} pipeline stages completed successfully")
 
     # Export bundle if requested
     if getattr(args, "export", False):
         from portrait_map_lab.export import build_export_bundle, save_export_bundle
 
         logger.info("Building export bundle...")
-        bundle = build_export_bundle(
-            result, image_name, png_source_dir=base_output_dir
-        )
+        bundle = build_export_bundle(result, image_name, png_source_dir=base_output_dir)
         export_dir = save_export_bundle(bundle, base_output_dir)
 
         print("\n--- Export Bundle ---")
@@ -1070,6 +1387,8 @@ def main() -> int:
             return handle_density(args, image, image_name, logger)
         elif args.pipeline == "flow":
             return handle_flow(args, image, image_name, logger)
+        elif args.pipeline == "complexity":
+            return handle_complexity(args, image, image_name, logger)
         elif args.pipeline == "all":
             return handle_all(args, image, image_name, logger)
         else:
