@@ -271,16 +271,18 @@ plotter-nodes/
 
 ### 4.3 Map Combination
 
-- [ ] Create `combine.py` with `from __future__ import annotations`
-- [ ] Implement `combine_maps(maps: dict[str, np.ndarray], weights: dict[str, float]) -> np.ndarray`:
+- [x] Create `combine.py` with `from __future__ import annotations`
+- [x] Implement `combine_maps(maps: dict[str, np.ndarray], weights: dict[str, float]) -> np.ndarray`:
   - Weighted sum of specified maps
   - Normalize result to [0.0, 1.0]
   - Raise `ValueError` if weight keys don't match map keys
-- [ ] Write `tests/test_combine.py`:
+- [x] Write `tests/test_combine.py`:
   - Test: output is normalized to [0.0, 1.0]
   - Test: equal weights on identical maps returns the same map
   - Test: zero weight for a map excludes it from result
   - Test: mismatched keys raise `ValueError`
+
+> **Note:** Implementation complete with 12 comprehensive tests including edge cases for negative weights, empty maps, all-zero weights, different shapes, and practical eye/mouth combination scenario. Uses absolute values of weights for normalization to handle negative weights correctly. All acceptance criteria verified passing.
 
 **Acceptance Criteria:**
 - Weighted combination produces array in [0.0, 1.0]
