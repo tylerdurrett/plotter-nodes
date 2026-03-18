@@ -255,7 +255,7 @@ The `all` subcommand produces both subdirectories side by side.
 
 ---
 
-## Phase 5: CLI Refactoring
+## Phase 5: CLI Refactoring ✅
 
 **Purpose:** Restructure the CLI from flat argparse to subcommands to support multiple map generators.
 
@@ -263,19 +263,28 @@ The `all` subcommand produces both subdirectories side by side.
 
 ### 5.1 Refactor run_pipeline.py to subcommand architecture
 
-- [ ] Restructure `scripts/run_pipeline.py` to use argparse subcommands: `features` (existing eye/mouth pipeline), `contour` (new face contour pipeline), `all` (runs both)
-- [ ] Extract shared remap args (`--curve`, `--sigma`, `--tau`, `--radius`, `--clamp-distance`) and shared args (`image_path`, `--output-dir`) onto the parent parser
-- [ ] Add `features` subcommand with `--eye-weight`, `--mouth-weight`
-- [ ] Add `contour` subcommand with `--direction` (choices: inward, outward, both, band), `--band-width`, `--contour-thickness`
-- [ ] Add `all` subcommand that runs both pipelines with their respective defaults
-- [ ] Each subcommand shares the landmark detection step where possible (for `all`, detect once and pass landmarks to both pipelines — or accept the duplicate detection as acceptable for now)
+- [x] Restructure `scripts/run_pipeline.py` to use argparse subcommands: `features` (existing eye/mouth pipeline), `contour` (new face contour pipeline), `all` (runs both)
+- [x] Extract shared remap args (`--curve`, `--sigma`, `--tau`, `--radius`, `--clamp-distance`) and shared args (`image_path`, `--output-dir`) onto the parent parser
+- [x] Add `features` subcommand with `--eye-weight`, `--mouth-weight`
+- [x] Add `contour` subcommand with `--direction` (choices: inward, outward, both, band), `--band-width`, `--contour-thickness`
+- [x] Add `all` subcommand that runs both pipelines with their respective defaults
+- [x] Each subcommand shares the landmark detection step where possible (for `all`, detect once and pass landmarks to both pipelines — or accept the duplicate detection as acceptable for now)
 
 **Acceptance Criteria:**
-- `uv run python scripts/run_pipeline.py features test_images/20230427-171404.JPG` writes to `output/20230427-171404/features/`
-- `uv run python scripts/run_pipeline.py contour test_images/20230427-171404.JPG` writes to `output/20230427-171404/contour/`
-- `uv run python scripts/run_pipeline.py all test_images/20230427-171404.JPG` writes to both `features/` and `contour/` subdirectories
-- `uv run python scripts/run_pipeline.py --help` shows subcommands
-- `uv run python scripts/run_pipeline.py contour --help` shows contour-specific args
+- `uv run python scripts/run_pipeline.py features test_images/20230427-171404.JPG` writes to `output/20230427-171404/features/` ✅
+- `uv run python scripts/run_pipeline.py contour test_images/20230427-171404.JPG` writes to `output/20230427-171404/contour/` ✅
+- `uv run python scripts/run_pipeline.py all test_images/20230427-171404.JPG` writes to both `features/` and `contour/` subdirectories ✅
+- `uv run python scripts/run_pipeline.py --help` shows subcommands ✅
+- `uv run python scripts/run_pipeline.py contour --help` shows contour-specific args ✅
+
+**Implementation Notes:**
+- Successfully refactored CLI to subcommand architecture
+- Shared arguments are properly extracted to each subparser (image_path and remap configs)
+- Each subcommand has its own handler function for clarity
+- The `all` subcommand runs both pipelines sequentially (duplicate landmark detection accepted for simplicity)
+- All acceptance criteria met and tested
+- Code quality verified with ruff (all checks pass)
+- Ready for Phase 6: Documentation
 
 ---
 
