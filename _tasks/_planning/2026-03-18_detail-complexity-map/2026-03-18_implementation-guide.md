@@ -229,14 +229,14 @@ docs/
 
 ### 3.1 Implement compute_flow_speed
 
-- [ ] Create `src/portrait_map_lab/flow_speed.py`
-- [ ] Implement `compute_flow_speed(complexity: np.ndarray, config: FlowSpeedConfig | None = None) -> np.ndarray`:
+- [x] Create `src/portrait_map_lab/flow_speed.py`
+- [x] Implement `compute_flow_speed(complexity: np.ndarray, config: FlowSpeedConfig | None = None) -> np.ndarray`:
   1. If config is None, use defaults
   2. Compute: `speed = speed_max - complexity * (speed_max - speed_min)`
   3. Clip to [speed_min, speed_max]
   4. Return float64
-- [ ] Add `__all__` with `compute_flow_speed`
-- [ ] Write tests in `tests/test_flow_speed.py`: `TestComputeFlowSpeed`
+- [x] Add `__all__` with `compute_flow_speed`
+- [x] Write tests in `tests/test_flow_speed.py`: `TestComputeFlowSpeed`
   - Zero complexity → speed_max everywhere
   - Full complexity (1.0) → speed_min everywhere
   - Mid complexity (0.5) → midpoint speed
@@ -245,11 +245,19 @@ docs/
   - Custom speed_min/speed_max work correctly
 
 **Acceptance Criteria:**
-- `complexity=0.0` everywhere → all values equal `speed_max` (1.0)
-- `complexity=1.0` everywhere → all values equal `speed_min` (0.3)
-- `complexity=0.5` → values at `0.65` (midpoint of 0.3–1.0)
-- Output is float64, same shape, all values in [speed_min, speed_max]
-- `pytest tests/test_flow_speed.py` passes
+- `complexity=0.0` everywhere → all values equal `speed_max` (1.0) ✅
+- `complexity=1.0` everywhere → all values equal `speed_min` (0.3) ✅
+- `complexity=0.5` → values at `0.65` (midpoint of 0.3–1.0) ✅
+- Output is float64, same shape, all values in [speed_min, speed_max] ✅
+- `pytest tests/test_flow_speed.py` passes ✅
+
+**Implementation Notes:**
+- Phase 3 completed successfully (2026-03-18)
+- Created flow_speed.py module with compute_flow_speed function
+- Implemented linear inverse mapping for speed derivation
+- Added comprehensive test suite with 11 tests covering all edge cases
+- Fixed floating-point precision issues in tests using np.isclose
+- All tests pass, code quality verified with ruff
 
 ---
 
