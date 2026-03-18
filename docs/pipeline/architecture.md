@@ -23,27 +23,37 @@ The Portrait Map Lab pipeline implements a modular, extensible architecture for 
 └──────┬──────┘
        │
        v
-┌──────────────────────────────────────┐
-│         Pipeline Orchestrator         │
-│                                       │
-│  ┌────────────┐  ┌────────────┐     │
-│  │ Landmarks  │→ │   Masks    │     │
-│  └────────────┘  └──────┬─────┘     │
-│                         │            │
-│  ┌────────────┐  ┌──────v─────┐     │
-│  │  Distance  │← │  Regions   │     │
-│  │   Fields   │  └────────────┘     │
-│  └──────┬─────┘                      │
-│         │                            │
-│  ┌──────v─────┐  ┌────────────┐     │
-│  │ Influence  │→ │  Combine   │     │
-│  │    Maps    │  └──────┬─────┘     │
-│  └────────────┘         │            │
-└──────────────────────────┼───────────┘
+┌──────────────────────────────────────────────┐
+│           Pipeline Orchestrator               │
+│                                               │
+│  ┌────────────┐  ┌────────────┐             │
+│  │ Landmarks  │→ │   Masks    │             │
+│  └────────────┘  └──────┬─────┘             │
+│                         │                    │
+│  ┌────────────┐  ┌──────v─────┐             │
+│  │  Distance  │← │  Regions   │             │
+│  │   Fields   │  └────────────┘             │
+│  └──────┬─────┘                              │
+│         │                                    │
+│  ┌──────v─────┐  ┌────────────┐             │
+│  │ Influence  │→ │  Combine   │             │
+│  │    Maps    │  └──────┬─────┘             │
+│  └────────────┘         │                    │
+│                         │                    │
+│  ┌─────────────┐  ┌─────v──────┐            │
+│  │ Complexity  │→ │ Flow Speed │            │
+│  │    Map      │  │ Derivation │            │
+│  └─────────────┘  └──────┬─────┘            │
+│                          │                   │
+│  ┌─────────────┐  ┌──────v─────┐            │
+│  │     ETF     │→ │ Flow Field │            │
+│  └─────────────┘  │  Blending  │            │
+│                   └──────┬─────┘            │
+└──────────────────────────┼───────────────────┘
                           │
                     ┌──────v─────┐
                     │   Output   │
-                    │    Map     │
+                    │  Bundle    │
                     └────────────┘
 ```
 
@@ -67,6 +77,8 @@ The Portrait Map Lab pipeline implements a modular, extensible architecture for 
 | `etf.py` | Edge Tangent Field | OpenCV, SciPy | Tangent fields, coherence |
 | `flow_fields.py` | Flow field blending | NumPy | Combined flow fields |
 | `lic.py` | LIC visualization | SciPy | Flow textures |
+| `complexity_map.py` | Local complexity measurement | OpenCV, SciPy | ComplexityResult |
+| `flow_speed.py` | Speed derivation from complexity | NumPy | Speed arrays |
 
 ### Export Module
 
@@ -110,6 +122,27 @@ class ContourResult:
     signed_distance: np.ndarray
     directional_distance: np.ndarray
     influence_map: np.ndarray
+
+@dataclass(frozen=True)
+class ComplexityResult:
+    raw_complexity: np.ndarray     # Unnormalized metric output
+    complexity: np.ndarray          # Normalized [0, 1] complexity
+    metric: str                     # Which metric was used
+
+@dataclass(frozen=True)
+class FlowResult:
+    tangent_x: np.ndarray
+    tangent_y: np.ndarray
+    coherence: np.ndarray
+    flow_speed: np.ndarray | None = None  # Speed modulation from complexity
+
+@dataclass(frozen=True)
+class ComposedResult:
+    feature_result: PipelineResult | None
+    contour_result: ContourResult | None
+    density_result: DensityResult | None
+    flow_result: FlowResult | None
+    complexity_result: ComplexityResult | None  # New field
 ```
 
 ### Configuration Models
@@ -139,6 +172,20 @@ class ContourConfig:
     epsilon_factor: float = 0.005
     smooth_contour: bool = True  # Gaussian blur on SDF for rounder contours
     output_dir: str = "output"
+
+@dataclass
+class ComplexityConfig:
+    metric: str = "gradient"  # gradient, laplacian, multiscale_gradient
+    sigma: float = 3.0
+    scales: list[float] = field(default_factory=lambda: [1.0, 3.0, 8.0])
+    scale_weights: list[float] = field(default_factory=lambda: [0.5, 0.3, 0.2])
+    normalize_percentile: float = 99.0
+    output_dir: str = "output"
+
+@dataclass
+class FlowSpeedConfig:
+    speed_min: float = 0.3  # Speed in complex areas
+    speed_max: float = 1.0  # Speed in smooth areas
 ```
 
 ## Pipeline Orchestration

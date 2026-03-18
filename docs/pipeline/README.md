@@ -24,6 +24,11 @@ Generates distance maps based on the face boundary:
 
 6. **[Face Contour Distance Map](06-face-contour.md)** - Compute signed distance fields from face oval contour with directional control
 
+### Complexity Pipeline
+Measures local image complexity for flow speed modulation:
+
+13. **[Complexity Map](13-complexity-map.md)** - Compute local complexity using gradient/Laplacian metrics with flow speed derivation
+
 ### Export
 Packages algorithm inputs for cross-language consumption:
 
@@ -66,6 +71,31 @@ result = run_contour_pipeline(image, config)
 contour_map = result.influence_map
 ```
 
+### Complexity Pipeline
+
+```python
+from portrait_map_lab import load_image, compute_complexity_map, ComplexityConfig
+from portrait_map_lab import compute_flow_speed, FlowSpeedConfig
+
+# Load portrait image
+image = load_image(Path("portrait.jpg"))
+
+# Compute complexity with gradient metric
+config = ComplexityConfig(
+    metric="gradient",           # gradient, laplacian, or multiscale_gradient
+    sigma=3.0,                  # Gaussian smoothing
+    normalize_percentile=99.0   # Robust normalization
+)
+result = compute_complexity_map(image, config)
+
+# Access the complexity map (normalized 0.0-1.0)
+complexity = result.complexity
+
+# Derive flow speed from complexity (optional)
+speed_config = FlowSpeedConfig(speed_min=0.3, speed_max=1.0)
+flow_speed = compute_flow_speed(complexity, speed_config)
+```
+
 ### Custom Configuration
 
 ```python
@@ -97,23 +127,32 @@ result = run_feature_distance_pipeline(image, config)
                            ↓
                   [Landmark Detection]
                     478 face points
-                     ↙          ↘
-        Feature Pipeline      Contour Pipeline
-               ↓                     ↓
-        [Region Masks]        [Face Boundary]
-         eyes, mouth           convex hull
-               ↓                     ↓
-      [Distance Fields]      [Signed Distance]
-        from features         from contour
-               ↓                     ↓
-       [Influence Maps]    [Directional Distance]
-         remapped           inward/outward/both
-               ↓                     ↓
-        [Combination]        [Influence Map]
-        weighted sum          normalized
-               ↓                     ↓
-        Feature Map           Contour Map
-         (0.0-1.0)             (0.0-1.0)
+                     ↙     |     ↘
+        Feature Pipeline   |   Contour Pipeline
+               ↓           |          ↓
+        [Region Masks]     |    [Face Boundary]
+         eyes, mouth       |     convex hull
+               ↓           |          ↓
+      [Distance Fields]    |   [Signed Distance]
+        from features      |     from contour
+               ↓           |          ↓
+       [Influence Maps]    |  [Directional Distance]
+         remapped          |   inward/outward/both
+               ↓           |          ↓
+        [Combination]      |    [Influence Map]
+        weighted sum       |      normalized
+               ↓           |          ↓
+        Feature Map        |     Contour Map
+         (0.0-1.0)         |      (0.0-1.0)
+                           ↓
+                    [Complexity Map]
+                  gradient/laplacian metrics
+                           ↓
+                    [Flow Speed]
+                  speed modulation from complexity
+                           ↓
+                     Flow Fields
+                  with speed variation
 ```
 
 ## Output Structure
@@ -203,11 +242,17 @@ uv run python scripts/run_pipeline.py features portrait.jpg
 # Run contour pipeline only
 uv run python scripts/run_pipeline.py contour portrait.jpg --direction inward
 
+# Run complexity pipeline only
+uv run python scripts/run_pipeline.py complexity portrait.jpg --metric gradient
+
+# Run flow with complexity-based speed modulation
+uv run python scripts/run_pipeline.py flow portrait.jpg --metric gradient --speed-min 0.3
+
 # Run all pipelines
 uv run python scripts/run_pipeline.py all portrait.jpg
 
-# Run all pipelines + generate export bundle for TypeScript
-uv run python scripts/run_pipeline.py all portrait.jpg --export
+# Run all pipelines with complexity + generate export bundle
+uv run python scripts/run_pipeline.py all portrait.jpg --metric gradient --export
 
 # Custom configuration
 uv run python scripts/run_pipeline.py contour portrait.jpg \
