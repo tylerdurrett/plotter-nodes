@@ -154,10 +154,19 @@ output/<image>/
 - Dark input regions produce high tonal target values ✅
 - All tests pass ✅ (18 tests, all passing)
 
-### 2.2 Implement `compose.py`
+### 2.2 Implement `compose.py` ✅ COMPLETE
 
-- [ ] Create `src/portrait_map_lab/compose.py` with `__all__`
-- [ ] Implement `compose_maps(map_a: np.ndarray, map_b: np.ndarray, mode: str = "multiply") -> np.ndarray` with modes:
+**Implementation Notes:**
+- Successfully created `src/portrait_map_lab/compose.py` with both required functions
+- Implemented all 4 blend modes: multiply, screen, max, and weighted
+- Weighted mode uses simple averaging (equal weights) to match normalization approach from combine.py
+- Added comprehensive input validation with helpful error messages
+- Gamma correction properly handles edge cases including zeros
+- Created comprehensive test suite with 24 test cases covering all modes and edge cases
+- All tests pass, no lint errors
+
+- [x] Create `src/portrait_map_lab/compose.py` with `__all__`
+- [x] Implement `compose_maps(map_a: np.ndarray, map_b: np.ndarray, mode: str = "multiply") -> np.ndarray` with modes:
   - `"multiply"`: `map_a * map_b` — element-wise product
   - `"screen"`: `1.0 - (1.0 - map_a) * (1.0 - map_b)` — inverse of multiply
   - `"max"`: `np.maximum(map_a, map_b)` — element-wise maximum
@@ -165,8 +174,8 @@ output/<image>/
   - Validate mode string, raise `ValueError` for unknown modes
   - Validate matching shapes
   - Output clipped to [0, 1]
-- [ ] Implement `build_density_target(tonal_target: np.ndarray, importance: np.ndarray, mode: str = "multiply", gamma: float = 1.0) -> np.ndarray` — compose then apply gamma: `result ** gamma`, clipped to [0, 1]
-- [ ] Write `tests/test_compose.py`:
+- [x] Implement `build_density_target(tonal_target: np.ndarray, importance: np.ndarray, mode: str = "multiply", gamma: float = 1.0) -> np.ndarray` — compose then apply gamma: `result ** gamma`, clipped to [0, 1]
+- [x] Write `tests/test_compose.py`:
   - Each blend mode produces expected results on known inputs
   - Multiply: (0.5 * 0.5 = 0.25), (1.0 * x = x), (0.0 * x = 0.0)
   - Screen: screen(0, 0) = 0, screen(1, x) = 1
@@ -177,10 +186,10 @@ output/<image>/
   - Shape mismatch raises ValueError
 
 **Acceptance Criteria:**
-- All four blend modes produce mathematically correct results
-- Gamma correction works as expected
-- Output always float64 in [0, 1]
-- All tests pass
+- All four blend modes produce mathematically correct results ✅
+- Gamma correction works as expected ✅
+- Output always float64 in [0, 1] ✅
+- All tests pass ✅ (24 tests, all passing)
 
 ### 2.3 Density pipeline integration
 
