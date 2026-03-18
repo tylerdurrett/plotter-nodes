@@ -268,6 +268,7 @@ def derive_contour_from_sdf(
     signed_distance: np.ndarray,
     thickness: int = 1,
     epsilon_factor: float = 0.005,
+    smooth_sigma: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Derive contour polygon, contour mask, and filled mask from a signed distance field.
 
@@ -283,6 +284,10 @@ def derive_contour_from_sdf(
     epsilon_factor
         Simplification factor for ``cv2.approxPolyDP``.
         Set to 0 to disable simplification.
+    smooth_sigma
+        Gaussian blur sigma applied to the SDF before thresholding.
+        Produces rounder contours and a more inclusive boundary.
+        Set to 0 to disable smoothing.
 
     Returns
     -------
@@ -297,8 +302,16 @@ def derive_contour_from_sdf(
     ValueError
         If no contour can be extracted from the SDF.
     """
-    # Derive filled mask from negative region of SDF
-    filled_mask = (signed_distance < 0).astype(np.uint8) * 255
+    sdf = signed_distance
+
+    # Smooth the SDF before thresholding for rounder, more inclusive contours
+    if smooth_sigma > 0:
+        # Kernel size must be odd; use 4*sigma rounded up to next odd
+        ksize = int(np.ceil(smooth_sigma * 4)) | 1
+        sdf = cv2.GaussianBlur(sdf, (ksize, ksize), smooth_sigma)
+
+    # Derive filled mask from negative region of (optionally smoothed) SDF
+    filled_mask = (sdf < 0).astype(np.uint8) * 255
 
     # Extract contour polygon from filled mask
     contours, _ = cv2.findContours(filled_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

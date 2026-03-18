@@ -374,12 +374,14 @@ def _compute_average_contour(
     )
     sdf_head = compute_sdf_from_polygon(poly_head, image_shape, config.contour_thickness)
 
-    # Average and derive outputs
-    logger.info("  Averaging signed distance fields...")
+    # Average and derive outputs — smooth SDF for rounder, more inclusive contours
+    logger.info("  Averaging and smoothing signed distance fields...")
     signed_distance = average_signed_distances([sdf_lm, sdf_face, sdf_head])
+    # Smooth sigma scales with image size for consistent results across resolutions
+    smooth_sigma = max(image_shape) * 0.01
     contour_polygon, contour_mask, filled_mask = derive_contour_from_sdf(
         signed_distance, thickness=config.contour_thickness,
-        epsilon_factor=config.epsilon_factor,
+        epsilon_factor=0.001, smooth_sigma=smooth_sigma,
     )
 
     logger.info("Preparing directional distance (mode: %s)...", config.direction)
