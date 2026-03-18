@@ -90,32 +90,34 @@ plotter-nodes/
 
 ### 1.2 Models (Core Dataclasses)
 
-- [ ] Create `models.py` with `from __future__ import annotations`
-- [ ] Define `LandmarkResult` dataclass:
+- [x] Create `models.py` with `from __future__ import annotations`
+- [x] Define `LandmarkResult` dataclass:
   - `landmarks`: `np.ndarray` (Nx2 or Nx3 array of pixel coordinates)
   - `image_shape`: `tuple[int, int]` (height, width)
   - `confidence`: `float`
-- [ ] Define `RegionDefinition` dataclass:
+- [x] Define `RegionDefinition` dataclass:
   - `name`: `str`
   - `landmark_indices`: `list[int]`
-- [ ] Define `RemapConfig` dataclass with defaults:
+- [x] Define `RemapConfig` dataclass with defaults:
   - `curve`: `str` (default `"gaussian"`)
   - `radius`: `float` (default `150.0`)
   - `sigma`: `float` (default `80.0`)
   - `tau`: `float` (default `60.0`)
   - `clamp_distance`: `float` (default `300.0`)
-- [ ] Define `PipelineConfig` dataclass with defaults:
+- [x] Define `PipelineConfig` dataclass with defaults:
   - `regions`: `list[RegionDefinition]` (defaults to eye + mouth regions)
   - `remap`: `RemapConfig` (default instance)
   - `weights`: `dict[str, float]` (default `{"eyes": 0.6, "mouth": 0.4}`)
   - `output_dir`: `str` (default `"output"`)
-- [ ] Define `PipelineResult` dataclass:
+- [x] Define `PipelineResult` dataclass:
   - `landmarks`: `LandmarkResult`
   - `masks`: `dict[str, np.ndarray]`
   - `distance_fields`: `dict[str, np.ndarray]`
   - `influence_maps`: `dict[str, np.ndarray]`
   - `combined`: `np.ndarray`
-- [ ] Write `tests/test_models.py` — verify dataclasses instantiate with defaults, field types are correct
+- [x] Write `tests/test_models.py` — verify dataclasses instantiate with defaults, field types are correct
+
+> **Note:** All dataclasses use `slots=True`. Immutable types (`LandmarkResult`, `RegionDefinition`, `PipelineResult`) also use `frozen=True`. Config types (`RemapConfig`, `PipelineConfig`) are mutable for user tweaking. Default regions include real MediaPipe Face Mesh landmark indices via `_default_regions()` helper. 12 tests pass covering creation, defaults, frozen/mutable behavior, and independent default instances.
 
 **Acceptance Criteria:**
 - All dataclasses instantiate with default values where defined
