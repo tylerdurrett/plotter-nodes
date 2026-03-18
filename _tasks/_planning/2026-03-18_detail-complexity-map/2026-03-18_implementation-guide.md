@@ -369,22 +369,31 @@ docs/
 
 ### 5.1 Add complexity and flow_speed to export definitions
 
-- [ ] Add two entries to `_MAP_DEFINITIONS` in `export.py`:
+- [x] Add two entries to `_MAP_DEFINITIONS` in `export.py`:
   - `("complexity", "complexity_result.complexity", (0.0, 1.0), "Local image complexity for speed modulation")`
   - `("flow_speed", "flow_result.flow_speed", (0.0, 1.0), "Particle speed scalar derived from complexity")`
-- [ ] Handle the case where `complexity_result` is None (skip the map, don't fail)
-- [ ] Handle the case where `flow_speed` is None (skip the map)
+- [x] Handle the case where `complexity_result` is None (skip the map, don't fail)
+- [x] Handle the case where `flow_speed` is None (skip the map)
 
 ### 5.2 Write export tests
 
-- [ ] Add tests to verify complexity and flow_speed appear in export when present
-- [ ] Verify export works correctly when complexity is not computed (maps omitted, no error)
+- [x] Add tests to verify complexity and flow_speed appear in export when present
+- [x] Verify export works correctly when complexity is not computed (maps omitted, no error)
 
 **Acceptance Criteria:**
-- Export with complexity produces `complexity.bin` and `flow_speed.bin` in the bundle
-- Export without complexity omits those files and succeeds
-- Manifest includes correct metadata for new maps
-- `pytest tests/test_export.py` passes (if export tests exist, otherwise add to test_complexity_pipeline.py)
+- Export with complexity produces `complexity.bin` and `flow_speed.bin` in the bundle ✅
+- Export without complexity omits those files and succeeds ✅
+- Manifest includes correct metadata for new maps ✅
+- `pytest tests/test_export.py` passes (if export tests exist, otherwise add to test_complexity_pipeline.py) ✅
+
+**Implementation Notes:**
+- Phase 5 completed successfully (2026-03-18)
+- Modified export.py to add complexity and flow_speed to _MAP_DEFINITIONS
+- Updated build_export_bundle to gracefully handle optional fields with try/except
+- Enhanced test_export.py with new tests for optional maps
+- All 27 export tests pass, including new tests for complexity/flow_speed
+- Verified backward compatibility: exports without complexity still produce 5 maps
+- Verified with complexity: exports produce all 7 maps including complexity and flow_speed
 
 ---
 

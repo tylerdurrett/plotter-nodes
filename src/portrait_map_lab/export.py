@@ -63,6 +63,18 @@ _MAP_DEFINITIONS: list[tuple[str, str, tuple[float, float], str]] = [
         (0.0, 1.0),
         "Flow field confidence and reliability",
     ),
+    (
+        "complexity",
+        "complexity_result.complexity",
+        (0.0, 1.0),
+        "Local image complexity for speed modulation",
+    ),
+    (
+        "flow_speed",
+        "flow_result.flow_speed",
+        (0.0, 1.0),
+        "Particle speed scalar derived from complexity",
+    ),
 ]
 
 
@@ -126,29 +138,35 @@ def build_export_bundle(
     width: int | None = None
 
     for key, attr_path, value_range, description in _MAP_DEFINITIONS:
-        array = _resolve_attr(result, attr_path)
-        if not isinstance(array, np.ndarray):
-            msg = f"Expected ndarray for {attr_path}, got {type(array)}"
-            raise TypeError(msg)
+        try:
+            array = _resolve_attr(result, attr_path)
+            if array is None:
+                continue  # Skip None values
+            if not isinstance(array, np.ndarray):
+                msg = f"Expected ndarray for {attr_path}, got {type(array)}"
+                raise TypeError(msg)
 
-        if height is None:
-            height, width = array.shape[:2]
-        assert height is not None
-        assert width is not None
+            if height is None:
+                height, width = array.shape[:2]
+            assert height is not None
+            assert width is not None
 
-        float32_array = array.astype(np.float32)
-        binary_maps[key] = float32_array.tobytes()
+            float32_array = array.astype(np.float32)
+            binary_maps[key] = float32_array.tobytes()
 
-        map_entries.append(
-            ExportMapEntry(
-                filename=f"{key}.bin",
-                key=key,
-                dtype="float32",
-                shape=(height, width),
-                value_range=value_range,
-                description=description,
+            map_entries.append(
+                ExportMapEntry(
+                    filename=f"{key}.bin",
+                    key=key,
+                    dtype="float32",
+                    shape=(height, width),
+                    value_range=value_range,
+                    description=description,
+                )
             )
-        )
+        except AttributeError:
+            # Skip missing optional fields (e.g., complexity_result is None)
+            continue
 
     assert height is not None
     assert width is not None

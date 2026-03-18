@@ -14,6 +14,7 @@ from portrait_map_lab.export import (
     save_export_bundle,
 )
 from portrait_map_lab.models import (
+    ComplexityResult,
     ComposedResult,
     ContourResult,
     DensityResult,
@@ -24,7 +25,12 @@ from portrait_map_lab.models import (
 )
 
 
-def _make_synthetic_composed_result(height: int = 48, width: int = 64) -> ComposedResult:
+def _make_synthetic_composed_result(
+    height: int = 48,
+    width: int = 64,
+    include_complexity: bool = False,
+    include_flow_speed: bool = False,
+) -> ComposedResult:
     """Build a minimal ComposedResult with synthetic arrays for testing."""
     shape = (height, width)
     landmarks = LandmarkResult(
@@ -64,6 +70,10 @@ def _make_synthetic_composed_result(height: int = 48, width: int = 64) -> Compos
     )
     # Create unit-vector flow fields
     angle = rng.random(shape) * 2 * np.pi
+    flow_speed = None
+    if include_flow_speed:
+        flow_speed = rng.random(shape) * 0.7 + 0.3  # Range [0.3, 1.0]
+
     flow_result = FlowResult(
         etf=etf_result,
         contour_flow_x=np.cos(angle),
@@ -71,13 +81,25 @@ def _make_synthetic_composed_result(height: int = 48, width: int = 64) -> Compos
         blend_weight=rng.random(shape),
         flow_x=np.cos(angle),
         flow_y=np.sin(angle),
+        flow_speed=flow_speed,
     )
+
+    # Add complexity result if requested
+    complexity_result = None
+    if include_complexity:
+        complexity_result = ComplexityResult(
+            raw_complexity=rng.random(shape) * 10.0,  # Some raw values
+            complexity=rng.random(shape),  # Normalized [0, 1]
+            metric="gradient",
+        )
+
     return ComposedResult(
         feature_result=feature_result,
         contour_result=contour_result,
         density_result=density_result,
         flow_result=flow_result,
         lic_image=rng.random(shape),
+        complexity_result=complexity_result,
     )
 
 
@@ -183,6 +205,33 @@ class TestBuildExportBundle:
         result = _make_synthetic_composed_result()
         bundle = build_export_bundle(result, "test.jpg")
         assert bundle.png_files == {}
+
+    def test_includes_complexity_and_flow_speed_when_present(self):
+        """Test that complexity and flow_speed maps are included when available."""
+        result = _make_synthetic_composed_result(
+            include_complexity=True,
+            include_flow_speed=True,
+        )
+        bundle = build_export_bundle(result, "test.jpg")
+        assert len(bundle.manifest.maps) == 7  # 5 base + 2 new
+        assert "complexity" in bundle.binary_maps
+        assert "flow_speed" in bundle.binary_maps
+
+    def test_excludes_optional_maps_when_absent(self):
+        """Test backward compatibility - no complexity means only 5 maps."""
+        result = _make_synthetic_composed_result()  # No complexity
+        bundle = build_export_bundle(result, "test.jpg")
+        assert len(bundle.manifest.maps) == 5  # Original 5 maps only
+        assert "complexity" not in bundle.binary_maps
+        assert "flow_speed" not in bundle.binary_maps
+
+    def test_partial_optional_maps(self):
+        """Test with complexity but no flow_speed."""
+        result = _make_synthetic_composed_result(include_complexity=True)
+        bundle = build_export_bundle(result, "test.jpg")
+        assert len(bundle.manifest.maps) == 6  # 5 base + complexity
+        assert "complexity" in bundle.binary_maps
+        assert "flow_speed" not in bundle.binary_maps
 
     def test_collects_png_files_from_source_dir(self):
         result = _make_synthetic_composed_result()
@@ -313,3 +362,24 @@ class TestSaveExportBundle:
             export_dir = save_export_bundle(bundle, tmpdir)
             assert isinstance(export_dir, Path)
             assert export_dir == Path(tmpdir) / "export"
+
+    def test_creates_all_bin_files_with_complexity(self):
+        """Test that all 7 bin files are created when complexity is included."""
+        result = _make_synthetic_composed_result(
+            include_complexity=True,
+            include_flow_speed=True,
+        )
+        bundle = build_export_bundle(result, "test.jpg")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            export_dir = save_export_bundle(bundle, tmpdir)
+            expected_files = [
+                "density_target.bin",
+                "flow_x.bin",
+                "flow_y.bin",
+                "importance.bin",
+                "coherence.bin",
+                "complexity.bin",
+                "flow_speed.bin",
+            ]
+            for filename in expected_files:
+                assert (export_dir / filename).exists(), f"Missing {filename}"
