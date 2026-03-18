@@ -191,7 +191,7 @@ The `all` subcommand produces both subdirectories side by side.
 
 ---
 
-## Phase 4: Pipeline and Visualization
+## Phase 4: Pipeline and Visualization ✅
 
 **Purpose:** Wire the core contour functions into a pipeline with visualization and file output.
 
@@ -199,51 +199,59 @@ The `all` subcommand produces both subdirectories side by side.
 
 ### 4.1 Add draw_contour to viz.py
 
-- [ ] Implement `draw_contour(image: np.ndarray, polygon: np.ndarray, color: tuple[int, int, int] = (0, 255, 255), thickness: int = 2) -> np.ndarray` — draws the face oval as a closed polyline on a copy of the image, returns annotated image without mutation
+- [x] Implement `draw_contour(image: np.ndarray, polygon: np.ndarray, color: tuple[int, int, int] = (0, 255, 255), thickness: int = 2) -> np.ndarray` — draws the face oval as a closed polyline on a copy of the image, returns annotated image without mutation
 
 **Acceptance Criteria:**
-- Returns a new image (input not mutated)
-- Output has same shape and dtype as input
-- Drawn pixels differ from original at contour locations
+- Returns a new image (input not mutated) ✅
+- Output has same shape and dtype as input ✅
+- Drawn pixels differ from original at contour locations ✅
 
 ### 4.2 Implement run_contour_pipeline
 
-- [ ] Add `run_contour_pipeline(image: np.ndarray, config: ContourConfig | None = None) -> ContourResult` to `pipelines.py`. Steps: detect_landmarks → get_face_oval_polygon → rasterize_contour_mask → rasterize_filled_mask → compute_signed_distance → prepare_directional_distance → remap_influence. Return ContourResult with all intermediates.
-- [ ] Add logging at each step, consistent with existing pipeline
+- [x] Add `run_contour_pipeline(image: np.ndarray, config: ContourConfig | None = None) -> ContourResult` to `pipelines.py`. Steps: detect_landmarks → get_face_oval_polygon → rasterize_contour_mask → rasterize_filled_mask → compute_signed_distance → prepare_directional_distance → remap_influence. Return ContourResult with all intermediates.
+- [x] Add logging at each step, consistent with existing pipeline
 
 **Acceptance Criteria:**
-- `run_contour_pipeline(test_image)` returns a `ContourResult` with all fields populated
-- All array fields have shape `(h, w)` matching input image
-- `influence_map` values are in `[0.0, 1.0]`
-- `signed_distance` has both negative and positive values
-- Works with default config (no args beyond image)
+- `run_contour_pipeline(test_image)` returns a `ContourResult` with all fields populated ✅
+- All array fields have shape `(h, w)` matching input image ✅
+- `influence_map` values are in `[0.0, 1.0]` ✅
+- `signed_distance` has both negative and positive values ✅
+- Works with default config (no args beyond image) ✅
 
 ### 4.3 Implement save_contour_outputs
 
-- [ ] Add `save_contour_outputs(result: ContourResult, image: np.ndarray, output_dir: Path) -> None` to `pipelines.py`. Saves: `contour_overlay.png`, `contour_mask.png`, `filled_mask.png`, `signed_distance_raw.npy` + heatmap (diverging colormap, symmetric range centered at zero), `directional_distance_raw.npy` + heatmap, `contour_influence.png`, `contact_sheet.png`
-- [ ] Use diverging colormap (`"RdBu"`) for signed distance heatmap with symmetric normalization: map `[-max_abs, +max_abs]` to `[0, 1]` so zero maps to 0.5
+- [x] Add `save_contour_outputs(result: ContourResult, image: np.ndarray, output_dir: Path) -> None` to `pipelines.py`. Saves: `contour_overlay.png`, `contour_mask.png`, `filled_mask.png`, `signed_distance_raw.npy` + heatmap (diverging colormap, symmetric range centered at zero), `directional_distance_raw.npy` + heatmap, `contour_influence.png`, `contact_sheet.png`
+- [x] Use diverging colormap (`"RdBu"`) for signed distance heatmap with symmetric normalization: map `[-max_abs, +max_abs]` to `[0, 1]` so zero maps to 0.5
 
 **Acceptance Criteria:**
-- All expected files are created in the output directory
-- `.npy` files are loadable and have correct shapes
-- Signed distance heatmap uses diverging colormap (visually distinct from other heatmaps)
-- Contact sheet includes all visualizations
+- All expected files are created in the output directory ✅
+- `.npy` files are loadable and have correct shapes ✅
+- Signed distance heatmap uses diverging colormap (visually distinct from other heatmaps) ✅
+- Contact sheet includes all visualizations ✅
 
 ### 4.4 Write integration tests
 
-- [ ] Create `tests/test_contour_pipeline.py` with tests using the real test image fixture: complete result populated, shapes match, influence normalized, default config works, custom config works, all direction modes produce valid output, save creates expected files, signed distance has both signs
+- [x] Create `tests/test_contour_pipeline.py` with tests using the real test image fixture: complete result populated, shapes match, influence normalized, default config works, custom config works, all direction modes produce valid output, save creates expected files, signed distance has both signs
 
 **Acceptance Criteria:**
-- `pytest tests/test_contour_pipeline.py` passes
-- Tests cover default config, custom config, all 4 direction modes, and file output
+- `pytest tests/test_contour_pipeline.py` passes ✅ (9 tests, all passing)
+- Tests cover default config, custom config, all 4 direction modes, and file output ✅
 
 ### 4.5 Update __init__.py exports
 
-- [ ] Add imports and `__all__` entries for: `ContourConfig`, `ContourResult`, `run_contour_pipeline`, `save_contour_outputs`, `FACE_OVAL_INDICES`, `get_face_oval_polygon`, `rasterize_contour_mask`, `rasterize_filled_mask`, `compute_signed_distance`, `prepare_directional_distance`, `draw_contour`
+- [x] Add imports and `__all__` entries for: `ContourConfig`, `ContourResult`, `run_contour_pipeline`, `save_contour_outputs`, `FACE_OVAL_INDICES`, `get_face_oval_polygon`, `rasterize_contour_mask`, `rasterize_filled_mask`, `compute_signed_distance`, `prepare_directional_distance`, `draw_contour`
 
 **Acceptance Criteria:**
-- All new public API names are importable from `portrait_map_lab`
-- `ruff check src/portrait_map_lab/__init__.py` passes
+- All new public API names are importable from `portrait_map_lab` ✅
+- `ruff check src/portrait_map_lab/__init__.py` passes ✅
+
+**Implementation Notes:**
+- Successfully implemented all 5 sections of Phase 4
+- All 113 tests pass (104 existing + 9 new)
+- Code quality verified with ruff (linting and formatting)
+- Pipeline tested end-to-end with test image, outputs verified
+- All expected files generated in `output/<image_name>/contour/` directory
+- Ready for Phase 5: CLI Refactoring
 
 ---
 

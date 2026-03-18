@@ -10,12 +10,19 @@ import numpy as np
 
 from portrait_map_lab.combine import combine_maps
 from portrait_map_lab.distance_fields import compute_distance_field
+from portrait_map_lab.face_contour import (
+    compute_signed_distance,
+    get_face_oval_polygon,
+    prepare_directional_distance,
+    rasterize_contour_mask,
+    rasterize_filled_mask,
+)
 from portrait_map_lab.landmarks import detect_landmarks
 from portrait_map_lab.masks import build_region_masks
-from portrait_map_lab.models import PipelineConfig, PipelineResult
+from portrait_map_lab.models import ContourConfig, ContourResult, PipelineConfig, PipelineResult
 from portrait_map_lab.remap import remap_influence
 from portrait_map_lab.storage import save_array, save_image
-from portrait_map_lab.viz import colorize_map, draw_landmarks, make_contact_sheet
+from portrait_map_lab.viz import colorize_map, draw_contour, draw_landmarks, make_contact_sheet
 
 logger = logging.getLogger(__name__)
 
@@ -197,3 +204,156 @@ def save_pipeline_outputs(result: PipelineResult, image: np.ndarray, output_dir:
     save_image(contact_sheet, output_dir / "contact_sheet.png")
 
     logger.info("All outputs saved successfully")
+
+
+def run_contour_pipeline(image: np.ndarray, config: ContourConfig | None = None) -> ContourResult:
+    """Run the face contour distance pipeline on a portrait image.
+
+    Parameters
+    ----------
+    image
+        BGR uint8 image array (as loaded by cv2.imread).
+    config
+        Contour pipeline configuration. If None, uses default configuration.
+
+    Returns
+    -------
+    ContourResult
+        Complete pipeline result with landmarks, contour polygon, masks,
+        distance fields, and influence map.
+
+    Raises
+    ------
+    ValueError
+        If no face is detected in the image.
+    """
+    if config is None:
+        config = ContourConfig()
+
+    logger.info("Starting contour distance pipeline...")
+
+    # Step 1: Detect landmarks
+    logger.info("Detecting face landmarks...")
+    landmarks = detect_landmarks(image)
+
+    # Step 2: Extract face oval polygon
+    logger.info("Extracting face oval polygon...")
+    contour_polygon = get_face_oval_polygon(landmarks)
+
+    # Step 3: Rasterize contour mask
+    logger.info("Rasterizing contour mask...")
+    contour_mask = rasterize_contour_mask(
+        contour_polygon, landmarks.image_shape, thickness=config.contour_thickness
+    )
+
+    # Step 4: Rasterize filled mask
+    logger.info("Rasterizing filled mask...")
+    filled_mask = rasterize_filled_mask(contour_polygon, landmarks.image_shape)
+
+    # Step 5: Compute signed distance field
+    logger.info("Computing signed distance field...")
+    signed_distance = compute_signed_distance(contour_mask, filled_mask)
+
+    # Step 6: Prepare directional distance
+    logger.info("Preparing directional distance (mode: %s)...", config.direction)
+    directional_distance = prepare_directional_distance(
+        signed_distance, mode=config.direction, band_width=config.band_width
+    )
+
+    # Step 7: Remap to influence map
+    logger.info("Remapping distance to influence...")
+    influence_map = remap_influence(directional_distance, config.remap)
+
+    logger.info("Contour pipeline completed successfully")
+
+    return ContourResult(
+        landmarks=landmarks,
+        contour_polygon=contour_polygon,
+        contour_mask=contour_mask,
+        filled_mask=filled_mask,
+        signed_distance=signed_distance,
+        directional_distance=directional_distance,
+        influence_map=influence_map,
+    )
+
+
+def save_contour_outputs(result: ContourResult, image: np.ndarray, output_dir: Path) -> None:
+    """Save all contour pipeline outputs to the specified directory.
+
+    Creates the following output structure:
+    ```
+    output_dir/
+        contour_overlay.png
+        contour_mask.png
+        filled_mask.png
+        signed_distance_raw.npy
+        signed_distance_heatmap.png
+        directional_distance_raw.npy
+        directional_distance_heatmap.png
+        contour_influence.png
+        contact_sheet.png
+    ```
+
+    Parameters
+    ----------
+    result
+        Complete contour pipeline result to save.
+    image
+        Original input image (for contour overlay).
+    output_dir
+        Directory to save outputs to (will be created if needed).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Saving contour pipeline outputs to %s", output_dir)
+
+    # Save contour overlay
+    contour_overlay = draw_contour(image, result.contour_polygon)
+    save_image(contour_overlay, output_dir / "contour_overlay.png")
+
+    # Save masks
+    save_image(result.contour_mask, output_dir / "contour_mask.png")
+    save_image(result.filled_mask, output_dir / "filled_mask.png")
+
+    # Save signed distance field (raw and heatmap with diverging colormap)
+    save_array(result.signed_distance, output_dir / "signed_distance_raw.npy")
+
+    # For signed distance, use symmetric normalization for diverging colormap
+    max_abs_dist = np.max(np.abs(result.signed_distance))
+    if max_abs_dist > 0:
+        # Normalize to [-1, 1] then shift to [0, 1] for colormap
+        signed_norm = (result.signed_distance / max_abs_dist + 1.0) / 2.0
+    else:
+        signed_norm = np.full_like(result.signed_distance, 0.5)
+    signed_heatmap = colorize_map(signed_norm, colormap="RdBu")
+    save_image(signed_heatmap, output_dir / "signed_distance_heatmap.png")
+
+    # Save directional distance field (raw and heatmap)
+    save_array(result.directional_distance, output_dir / "directional_distance_raw.npy")
+
+    # Normalize directional distance for visualization
+    # Clamp to reasonable range and normalize
+    dir_norm = np.clip(result.directional_distance, 0, 300) / 300.0
+    dir_heatmap = colorize_map(dir_norm, colormap="viridis")
+    save_image(dir_heatmap, output_dir / "directional_distance_heatmap.png")
+
+    # Save influence map
+    influence_img = colorize_map(result.influence_map, colormap="inferno")
+    save_image(influence_img, output_dir / "contour_influence.png")
+
+    # Create and save contact sheet
+    contact_images = {
+        "Original": image,
+        "Contour Overlay": contour_overlay,
+        "Contour Mask": cv2.cvtColor(result.contour_mask, cv2.COLOR_GRAY2BGR),
+        "Filled Mask": cv2.cvtColor(result.filled_mask, cv2.COLOR_GRAY2BGR),
+        "Signed Distance": signed_heatmap,
+        "Directional Distance": dir_heatmap,
+        "Influence Map": influence_img,
+    }
+
+    contact_sheet = make_contact_sheet(contact_images, columns=4)
+    save_image(contact_sheet, output_dir / "contact_sheet.png")
+
+    logger.info("All contour outputs saved successfully")

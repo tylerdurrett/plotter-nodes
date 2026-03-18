@@ -138,3 +138,39 @@ def make_contact_sheet(images: dict[str, np.ndarray], columns: int = 4) -> np.nd
         )
 
     return canvas
+
+
+def draw_contour(
+    image: np.ndarray,
+    polygon: np.ndarray,
+    color: tuple[int, int, int] = (0, 255, 255),
+    thickness: int = 2,
+) -> np.ndarray:
+    """Draw a face contour polygon on a copy of the image.
+
+    Parameters
+    ----------
+    image
+        BGR image array to annotate.
+    polygon
+        Nx2 array of polygon vertices in pixel coordinates.
+    color
+        BGR color tuple for the contour. Default is cyan (0, 255, 255).
+    thickness
+        Line thickness in pixels. Default is 2.
+
+    Returns
+    -------
+    np.ndarray
+        New image with contour drawn as a closed polyline.
+    """
+    # Create copy to avoid mutation
+    annotated = image.copy()
+
+    # Convert polygon to integer coordinates for cv2
+    pts = np.round(polygon).astype(np.int32)
+
+    # Draw closed polyline
+    cv2.polylines(annotated, [pts], isClosed=True, color=color, thickness=thickness)
+
+    return annotated
