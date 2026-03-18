@@ -9,6 +9,8 @@ import numpy as np
 __all__ = [
     "ComposeConfig",
     "ComposedResult",
+    "ComplexityConfig",
+    "ComplexityResult",
     "ContourConfig",
     "ContourResult",
     "DensityResult",
@@ -18,6 +20,7 @@ __all__ = [
     "ExportMapEntry",
     "FlowConfig",
     "FlowResult",
+    "FlowSpeedConfig",
     "LandmarkResult",
     "LICConfig",
     "LuminanceConfig",
@@ -54,6 +57,35 @@ class RemapConfig:
     sigma: float = 80.0
     tau: float = 60.0
     clamp_distance: float = 300.0
+
+
+@dataclass(slots=True)
+class ComplexityConfig:
+    """Configuration for complexity map computation."""
+
+    metric: str = "gradient"  # gradient, laplacian, or multiscale_gradient
+    sigma: float = 3.0  # Gaussian smoothing sigma for single-scale metrics
+    scales: list[float] = field(default_factory=lambda: [1.0, 3.0, 8.0])  # multiscale sigmas
+    scale_weights: list[float] = field(default_factory=lambda: [0.5, 0.3, 0.2])  # weights
+    normalize_percentile: float = 99.0  # percentile for normalization (100.0 = max)
+    output_dir: str = "output"
+
+
+@dataclass(frozen=True, slots=True)
+class ComplexityResult:
+    """Result of complexity map computation."""
+
+    raw_complexity: np.ndarray  # unnormalized metric output
+    complexity: np.ndarray  # normalized [0, 1] complexity map
+    metric: str  # which metric was used
+
+
+@dataclass(slots=True)
+class FlowSpeedConfig:
+    """Configuration for flow speed derivation from complexity."""
+
+    speed_min: float = 0.3  # speed in most complex areas
+    speed_max: float = 1.0  # speed in smooth areas
 
 
 @dataclass(slots=True)
@@ -261,6 +293,7 @@ class FlowResult:
     blend_weight: np.ndarray
     flow_x: np.ndarray
     flow_y: np.ndarray
+    flow_speed: np.ndarray | None = None  # particle speed scalar derived from complexity
 
 
 @dataclass(frozen=True, slots=True)

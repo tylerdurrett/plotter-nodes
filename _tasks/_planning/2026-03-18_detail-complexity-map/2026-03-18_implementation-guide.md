@@ -53,43 +53,50 @@ docs/
 
 ### 1.1 Add ComplexityConfig and ComplexityResult to models.py
 
-- [ ] Add `ComplexityConfig` dataclass (mutable, `slots=True`) with fields:
+- [x] Add `ComplexityConfig` dataclass (mutable, `slots=True`) with fields:
   - `metric: str = "gradient"` — one of `"gradient"`, `"laplacian"`, `"multiscale_gradient"`
   - `sigma: float = 3.0` — Gaussian smoothing sigma for single-scale metrics
   - `scales: list[float] = field(default_factory=lambda: [1.0, 3.0, 8.0])` — sigma values for multiscale metric
   - `scale_weights: list[float] = field(default_factory=lambda: [0.5, 0.3, 0.2])` — weights per scale
   - `normalize_percentile: float = 99.0` — percentile for normalization (100.0 = max)
   - `output_dir: str = "output"`
-- [ ] Add `ComplexityResult` dataclass (frozen, `slots=True`) with fields:
+- [x] Add `ComplexityResult` dataclass (frozen, `slots=True`) with fields:
   - `raw_complexity: np.ndarray` — unnormalized metric output
   - `complexity: np.ndarray` — normalized [0, 1] complexity map
   - `metric: str` — which metric was used
-- [ ] Add both classes to `__all__` in `models.py`
+- [x] Add both classes to `__all__` in `models.py`
 
 ### 1.2 Add FlowSpeedConfig to models.py
 
-- [ ] Add `FlowSpeedConfig` dataclass (mutable, `slots=True`) with fields:
+- [x] Add `FlowSpeedConfig` dataclass (mutable, `slots=True`) with fields:
   - `speed_min: float = 0.3` — speed in most complex areas
   - `speed_max: float = 1.0` — speed in smooth areas
-- [ ] Add to `__all__`
+- [x] Add to `__all__`
 
 ### 1.3 Add flow_speed field to FlowResult
 
-- [ ] Add `flow_speed: np.ndarray | None = None` field to `FlowResult`
-- [ ] Note: `FlowResult` is frozen, so this field must be set at construction time. When no complexity is available, pass `None`.
+- [x] Add `flow_speed: np.ndarray | None = None` field to `FlowResult`
+- [x] Note: `FlowResult` is frozen, so this field must be set at construction time. When no complexity is available, pass `None`.
 
 ### 1.4 Write model tests
 
-- [ ] Write tests in `test_models.py`: `TestComplexityConfig` (defaults, mutable, independent defaults for list fields), `TestComplexityResult` (creation, frozen), `TestFlowSpeedConfig` (defaults, mutable)
-- [ ] Write test for `FlowResult` construction with `flow_speed=None` (backward compatible) and with an array
+- [x] Write tests in `test_models.py`: `TestComplexityConfig` (defaults, mutable, independent defaults for list fields), `TestComplexityResult` (creation, frozen), `TestFlowSpeedConfig` (defaults, mutable)
+- [x] Write test for `FlowResult` construction with `flow_speed=None` (backward compatible) and with an array
 
 **Acceptance Criteria:**
-- `ComplexityConfig()` creates instance with expected defaults (`metric="gradient"`, `sigma=3.0`, `normalize_percentile=99.0`)
-- `ComplexityConfig` is mutable; `ComplexityResult` is frozen
-- Separate `ComplexityConfig` instances do not share mutable list state
-- `FlowSpeedConfig()` has `speed_min=0.3`, `speed_max=1.0`
-- `FlowResult` accepts `flow_speed=None` without error
-- `pytest tests/test_models.py` passes
+- `ComplexityConfig()` creates instance with expected defaults (`metric="gradient"`, `sigma=3.0`, `normalize_percentile=99.0`) ✅
+- `ComplexityConfig` is mutable; `ComplexityResult` is frozen ✅
+- Separate `ComplexityConfig` instances do not share mutable list state ✅
+- `FlowSpeedConfig()` has `speed_min=0.3`, `speed_max=1.0` ✅
+- `FlowResult` accepts `flow_speed=None` without error ✅
+- `pytest tests/test_models.py` passes ✅
+
+**Implementation Notes:**
+- Phase 1 completed successfully (2026-03-18)
+- All data models added to models.py with proper type annotations
+- Comprehensive tests added including backward compatibility test for FlowResult
+- Code quality verified with ruff (all checks passing)
+- All 47 existing model tests continue to pass
 
 ---
 

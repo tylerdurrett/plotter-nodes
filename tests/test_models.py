@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 
 from portrait_map_lab.models import (
+    ComplexityConfig,
+    ComplexityResult,
     ComposeConfig,
     ComposedResult,
     ContourConfig,
@@ -15,6 +17,7 @@ from portrait_map_lab.models import (
     ETFResult,
     FlowConfig,
     FlowResult,
+    FlowSpeedConfig,
     LandmarkResult,
     LICConfig,
     LuminanceConfig,
@@ -66,6 +69,80 @@ class TestRemapConfig:
         config = RemapConfig()
         config.sigma = 100.0
         assert config.sigma == 100.0
+
+
+class TestComplexityConfig:
+    def test_defaults(self):
+        config = ComplexityConfig()
+        assert config.metric == "gradient"
+        assert config.sigma == 3.0
+        assert config.scales == [1.0, 3.0, 8.0]
+        assert config.scale_weights == [0.5, 0.3, 0.2]
+        assert config.normalize_percentile == 99.0
+        assert config.output_dir == "output"
+
+    def test_mutable(self):
+        config = ComplexityConfig()
+        config.metric = "laplacian"
+        assert config.metric == "laplacian"
+        config.sigma = 5.0
+        assert config.sigma == 5.0
+        config.normalize_percentile = 100.0
+        assert config.normalize_percentile == 100.0
+
+    def test_independent_defaults(self):
+        """Ensure separate instances have independent list fields."""
+        a = ComplexityConfig()
+        b = ComplexityConfig()
+        a.scales.append(16.0)
+        assert len(b.scales) == 3  # Should still have default 3 scales
+        assert b.scales == [1.0, 3.0, 8.0]
+
+        c = ComplexityConfig()
+        d = ComplexityConfig()
+        c.scale_weights[0] = 0.7
+        assert d.scale_weights[0] == 0.5  # Should still be default value
+
+
+class TestComplexityResult:
+    def test_creation(self):
+        raw = np.random.rand(100, 100).astype(np.float64)
+        normalized = np.clip(raw / raw.max(), 0, 1).astype(np.float64)
+        result = ComplexityResult(
+            raw_complexity=raw,
+            complexity=normalized,
+            metric="gradient"
+        )
+        assert result.raw_complexity.shape == (100, 100)
+        assert result.complexity.shape == (100, 100)
+        assert result.metric == "gradient"
+        assert result.complexity.min() >= 0.0
+        assert result.complexity.max() <= 1.0
+
+    def test_frozen(self):
+        result = ComplexityResult(
+            raw_complexity=np.zeros((50, 50)),
+            complexity=np.zeros((50, 50)),
+            metric="laplacian"
+        )
+        with pytest.raises(AttributeError):
+            result.metric = "gradient"  # type: ignore[misc]
+        with pytest.raises(AttributeError):
+            result.complexity = np.ones((50, 50))  # type: ignore[misc]
+
+
+class TestFlowSpeedConfig:
+    def test_defaults(self):
+        config = FlowSpeedConfig()
+        assert config.speed_min == 0.3
+        assert config.speed_max == 1.0
+
+    def test_mutable(self):
+        config = FlowSpeedConfig()
+        config.speed_min = 0.1
+        assert config.speed_min == 0.1
+        config.speed_max = 2.0
+        assert config.speed_max == 2.0
 
 
 class TestPipelineConfig:
@@ -375,6 +452,48 @@ class TestFlowResult:
         assert result.blend_weight.shape == (100, 100)
         assert result.flow_x.shape == (100, 100)
         assert result.flow_y.shape == (100, 100)
+        assert result.flow_speed is None  # Default is None
+
+    def test_creation_with_flow_speed(self):
+        """Test creating FlowResult with flow_speed array."""
+        etf_result = ETFResult(
+            tangent_x=np.zeros((100, 100)),
+            tangent_y=np.zeros((100, 100)),
+            coherence=np.zeros((100, 100)),
+            gradient_magnitude=np.zeros((100, 100)),
+        )
+        flow_speed = np.ones((100, 100), dtype=np.float64) * 0.5
+        result = FlowResult(
+            etf=etf_result,
+            contour_flow_x=np.zeros((100, 100), dtype=np.float64),
+            contour_flow_y=np.zeros((100, 100), dtype=np.float64),
+            blend_weight=np.zeros((100, 100), dtype=np.float64),
+            flow_x=np.zeros((100, 100), dtype=np.float64),
+            flow_y=np.zeros((100, 100), dtype=np.float64),
+            flow_speed=flow_speed,
+        )
+        assert result.flow_speed is not None
+        assert result.flow_speed.shape == (100, 100)
+        assert np.allclose(result.flow_speed, 0.5)
+
+    def test_backward_compatibility(self):
+        """Test that FlowResult can be created without flow_speed (backward compatible)."""
+        etf_result = ETFResult(
+            tangent_x=np.zeros((50, 50)),
+            tangent_y=np.zeros((50, 50)),
+            coherence=np.zeros((50, 50)),
+            gradient_magnitude=np.zeros((50, 50)),
+        )
+        # This should work without specifying flow_speed
+        result = FlowResult(
+            etf=etf_result,
+            contour_flow_x=np.zeros((50, 50)),
+            contour_flow_y=np.zeros((50, 50)),
+            blend_weight=np.zeros((50, 50)),
+            flow_x=np.zeros((50, 50)),
+            flow_y=np.zeros((50, 50)),
+        )
+        assert result.flow_speed is None
 
     def test_frozen(self):
         etf_result = ETFResult(
