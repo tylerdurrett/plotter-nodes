@@ -9,3 +9,4 @@
 - As much as possible verify on your end that your code works. Use whatever means you can: testing, test scripts, browser screenshots
 - Always put your generated images in subdirectories in `output/` not in other test directories
 - Update docs when you add features
+- Be sure to run your code reviews after implementing new features
