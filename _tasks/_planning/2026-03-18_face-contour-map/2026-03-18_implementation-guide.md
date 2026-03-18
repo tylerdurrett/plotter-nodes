@@ -88,7 +88,7 @@ The `all` subcommand produces both subdirectories side by side.
 
 ---
 
-## Phase 2: Data Models
+## Phase 2: Data Models ✅
 
 **Purpose:** Define the configuration and result dataclasses needed by all subsequent phases.
 
@@ -96,16 +96,23 @@ The `all` subcommand produces both subdirectories side by side.
 
 ### 2.1 Add ContourConfig and ContourResult to models.py
 
-- [ ] Add `ContourConfig` dataclass (mutable, `slots=True`) with fields: `remap: RemapConfig`, `direction: str = "inward"`, `band_width: float | None = None`, `contour_thickness: int = 1`, `output_dir: str = "output"`
-- [ ] Add `ContourResult` dataclass (frozen, `slots=True`) with fields: `landmarks: LandmarkResult`, `contour_polygon: np.ndarray`, `contour_mask: np.ndarray`, `filled_mask: np.ndarray`, `signed_distance: np.ndarray`, `directional_distance: np.ndarray`, `influence_map: np.ndarray`
-- [ ] Add both classes to `__all__` in `models.py`
-- [ ] Write tests in `test_models.py`: `TestContourConfig` (defaults, mutable, independent defaults) and `TestContourResult` (creation, frozen)
+- [x] Add `ContourConfig` dataclass (mutable, `slots=True`) with fields: `remap: RemapConfig`, `direction: str = "inward"`, `band_width: float | None = None`, `contour_thickness: int = 1`, `output_dir: str = "output"`
+- [x] Add `ContourResult` dataclass (frozen, `slots=True`) with fields: `landmarks: LandmarkResult`, `contour_polygon: np.ndarray`, `contour_mask: np.ndarray`, `filled_mask: np.ndarray`, `signed_distance: np.ndarray`, `directional_distance: np.ndarray`, `influence_map: np.ndarray`
+- [x] Add both classes to `__all__` in `models.py`
+- [x] Write tests in `test_models.py`: `TestContourConfig` (defaults, mutable, independent defaults) and `TestContourResult` (creation, frozen)
 
 **Acceptance Criteria:**
-- `ContourConfig()` creates instance with expected defaults (`direction="inward"`, `band_width=None`, `contour_thickness=1`)
-- `ContourConfig` is mutable; `ContourResult` is frozen
-- Separate `ContourConfig` instances do not share mutable state
-- `pytest tests/test_models.py` passes
+- `ContourConfig()` creates instance with expected defaults (`direction="inward"`, `band_width=None`, `contour_thickness=1`) ✅
+- `ContourConfig` is mutable; `ContourResult` is frozen ✅
+- Separate `ContourConfig` instances do not share mutable state ✅
+- `pytest tests/test_models.py` passes ✅
+
+**Implementation Notes:**
+- Successfully added both dataclasses following established patterns in the codebase
+- Used `field(default_factory=RemapConfig)` to avoid shared mutable state
+- All 17 tests in test_models.py pass (12 existing + 5 new)
+- Code quality verified with ruff check
+- Ready for Phase 3: Core Contour Module implementation
 
 ---
 

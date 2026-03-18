@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 
 from portrait_map_lab.models import (
+    ContourConfig,
+    ContourResult,
     LandmarkResult,
     PipelineConfig,
     PipelineResult,
@@ -114,3 +116,65 @@ class TestPipelineResult:
         )
         with pytest.raises(AttributeError):
             result.combined = np.ones((50, 50))  # type: ignore[misc]
+
+
+class TestContourConfig:
+    def test_defaults(self):
+        config = ContourConfig()
+        assert isinstance(config.remap, RemapConfig)
+        assert config.direction == "inward"
+        assert config.band_width is None
+        assert config.contour_thickness == 1
+        assert config.output_dir == "output"
+
+    def test_mutable(self):
+        config = ContourConfig()
+        config.direction = "outward"
+        assert config.direction == "outward"
+        config.band_width = 50.0
+        assert config.band_width == 50.0
+
+    def test_independent_defaults(self):
+        a = ContourConfig()
+        b = ContourConfig()
+        a.remap.sigma = 100.0
+        assert b.remap.sigma == 80.0  # Should still be default value
+
+
+class TestContourResult:
+    def test_creation(self):
+        landmarks = LandmarkResult(
+            landmarks=np.zeros((478, 2)), image_shape=(100, 100), confidence=0.9
+        )
+        result = ContourResult(
+            landmarks=landmarks,
+            contour_polygon=np.zeros((36, 2), dtype=np.float64),
+            contour_mask=np.zeros((100, 100), dtype=np.uint8),
+            filled_mask=np.zeros((100, 100), dtype=np.uint8),
+            signed_distance=np.zeros((100, 100), dtype=np.float64),
+            directional_distance=np.zeros((100, 100), dtype=np.float64),
+            influence_map=np.zeros((100, 100), dtype=np.float64),
+        )
+        assert result.landmarks.image_shape == (100, 100)
+        assert result.contour_polygon.shape == (36, 2)
+        assert result.contour_mask.shape == (100, 100)
+        assert result.filled_mask.shape == (100, 100)
+        assert result.signed_distance.shape == (100, 100)
+        assert result.directional_distance.shape == (100, 100)
+        assert result.influence_map.shape == (100, 100)
+
+    def test_frozen(self):
+        landmarks = LandmarkResult(
+            landmarks=np.zeros((10, 2)), image_shape=(50, 50), confidence=0.8
+        )
+        result = ContourResult(
+            landmarks=landmarks,
+            contour_polygon=np.zeros((36, 2)),
+            contour_mask=np.zeros((50, 50)),
+            filled_mask=np.zeros((50, 50)),
+            signed_distance=np.zeros((50, 50)),
+            directional_distance=np.zeros((50, 50)),
+            influence_map=np.zeros((50, 50)),
+        )
+        with pytest.raises(AttributeError):
+            result.influence_map = np.ones((50, 50))  # type: ignore[misc]

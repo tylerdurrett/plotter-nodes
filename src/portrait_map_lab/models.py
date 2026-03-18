@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 import numpy as np
 
 __all__ = [
+    "ContourConfig",
+    "ContourResult",
     "LandmarkResult",
     "PipelineConfig",
     "PipelineResult",
@@ -41,6 +43,17 @@ class RemapConfig:
     sigma: float = 80.0
     tau: float = 60.0
     clamp_distance: float = 300.0
+
+
+@dataclass(slots=True)
+class ContourConfig:
+    """Configuration for face contour distance pipeline."""
+
+    remap: RemapConfig = field(default_factory=RemapConfig)
+    direction: str = "inward"
+    band_width: float | None = None
+    contour_thickness: int = 1
+    output_dir: str = "output"
 
 
 def _default_regions() -> list[RegionDefinition]:
@@ -135,3 +148,16 @@ class PipelineResult:
     distance_fields: dict[str, np.ndarray]
     influence_maps: dict[str, np.ndarray]
     combined: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class ContourResult:
+    """Result of face contour distance pipeline."""
+
+    landmarks: LandmarkResult
+    contour_polygon: np.ndarray
+    contour_mask: np.ndarray
+    filled_mask: np.ndarray
+    signed_distance: np.ndarray
+    directional_distance: np.ndarray
+    influence_map: np.ndarray
