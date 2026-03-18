@@ -173,18 +173,20 @@ plotter-nodes/
 
 ### 3.1 Face Region Definitions
 
-- [ ] Create `face_regions.py` with `from __future__ import annotations`
-- [ ] Define `DEFAULT_REGIONS: list[RegionDefinition]` containing:
+- [x] Create `face_regions.py` with `from __future__ import annotations`
+- [x] Define `DEFAULT_REGIONS: list[RegionDefinition]` containing:
   - `left_eye` — landmark indices for the left eye contour
   - `right_eye` — landmark indices for the right eye contour
   - `mouth` — landmark indices for the outer mouth contour
-- [ ] Implement `get_region_polygons(landmarks: LandmarkResult, regions: list[RegionDefinition]) -> dict[str, np.ndarray]`:
+- [x] Implement `get_region_polygons(landmarks: LandmarkResult, regions: list[RegionDefinition]) -> dict[str, np.ndarray]`:
   - Extract pixel coordinates for each region's landmark indices
   - Return dict mapping region name to Nx2 polygon array
-- [ ] Write `tests/test_face_regions.py`:
+- [x] Write `tests/test_face_regions.py`:
   - Test: default regions contain expected names
   - Test: polygon extraction returns correct shapes with valid landmark input
   - Test: polygon coordinates are within image bounds
+
+> **Note:** `DEFAULT_REGIONS` imports and reuses the `_default_regions()` function from models.py that was already created in Phase 1.2. All 5 tests pass verifying region names, indices, polygon extraction, bounds checking, and value preservation.
 
 **Acceptance Criteria:**
 - `DEFAULT_REGIONS` defines three regions with correct names
@@ -193,19 +195,21 @@ plotter-nodes/
 
 ### 3.2 Mask Generation
 
-- [ ] Create `masks.py` with `from __future__ import annotations`
-- [ ] Implement `rasterize_mask(polygon: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray`:
+- [x] Create `masks.py` with `from __future__ import annotations`
+- [x] Implement `rasterize_mask(polygon: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray`:
   - Use `cv2.fillPoly` on a zeros array
   - Return `uint8` array (0 or 255)
-- [ ] Implement `build_region_masks(landmarks: LandmarkResult, regions: list[RegionDefinition]) -> dict[str, np.ndarray]`:
+- [x] Implement `build_region_masks(landmarks: LandmarkResult, regions: list[RegionDefinition]) -> dict[str, np.ndarray]`:
   - Call `get_region_polygons` then `rasterize_mask` for each
   - Add `combined_eyes` key (bitwise OR of left + right eye masks)
   - Return dict of all masks
-- [ ] Write `tests/test_masks.py`:
+- [x] Write `tests/test_masks.py`:
   - Test: `rasterize_mask` output is correct dtype and shape
   - Test: mask contains only 0 and 255
   - Test: mask for a known polygon has nonzero area
   - Test: `build_region_masks` returns expected keys including `combined_eyes`
+
+> **Note:** All 9 tests pass. The `combined_eyes` mask is only created when both `left_eye` and `right_eye` masks are present. Handles edge case of empty polygons correctly.
 
 **Acceptance Criteria:**
 - Masks are `uint8` with values only 0 or 255
