@@ -67,6 +67,12 @@ The Portrait Map Lab pipeline implements a modular, extensible architecture for 
 | `flow_fields.py` | Flow field blending | NumPy | Combined flow fields |
 | `lic.py` | LIC visualization | SciPy | Flow textures |
 
+### Export Module
+
+| Module | Responsibility | Dependencies | Outputs |
+|--------|---------------|--------------|---------|
+| `export.py` | Cross-language export | NumPy, JSON | ExportBundle, manifest.json, .bin files |
+
 ### Support Modules
 
 | Module | Responsibility | Usage |

@@ -409,6 +409,12 @@ def parse_args() -> argparse.Namespace:
         default=42,
         help="Random seed for LIC noise texture",
     )
+    # Export bundle
+    all_parser.add_argument(
+        "--export",
+        action="store_true",
+        help="Generate export bundle (float32 .bin + manifest.json) for TypeScript",
+    )
 
     return parser.parse_args()
 
@@ -942,6 +948,27 @@ def handle_all(
     print(f"  - Clamp distance: {args.clamp_distance}")
     print("\n✓ Landmarks detected once and shared across all pipelines")
     print("✓ All 4 pipeline stages completed successfully")
+
+    # Export bundle if requested
+    if getattr(args, "export", False):
+        from portrait_map_lab.export import build_export_bundle, save_export_bundle
+
+        logger.info("Building export bundle...")
+        bundle = build_export_bundle(
+            result, image_name, png_source_dir=base_output_dir
+        )
+        export_dir = save_export_bundle(bundle, base_output_dir)
+
+        print("\n--- Export Bundle ---")
+        print(f"  Export directory: {export_dir}")
+        print(f"  Manifest: {export_dir / 'manifest.json'}")
+        print(f"  Binary maps: {len(bundle.binary_maps)} files")
+        for entry in bundle.manifest.maps:
+            size_kb = len(bundle.binary_maps[entry.key]) / 1024
+            print(f"    {entry.filename} ({size_kb:.0f} KB) — {entry.description}")
+        print(f"  Preview PNGs: {len(bundle.png_files)} files")
+        print("✓ Export bundle created for TypeScript consumption")
+
     print("=" * 60)
 
     return 0

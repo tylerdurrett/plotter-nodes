@@ -5,7 +5,18 @@ from __future__ import annotations
 from portrait_map_lab.combine import combine_maps
 from portrait_map_lab.compose import build_density_target, compose_maps
 from portrait_map_lab.distance_fields import compute_distance_field
-from portrait_map_lab.etf import compute_etf, compute_structure_tensor, extract_tangent_field, refine_tangent_field
+from portrait_map_lab.etf import (
+    compute_etf,
+    compute_structure_tensor,
+    extract_tangent_field,
+    refine_tangent_field,
+)
+from portrait_map_lab.export import (
+    ExportBundle,
+    build_export_bundle,
+    export_composed_result,
+    save_export_bundle,
+)
 from portrait_map_lab.face_contour import (
     FACE_OVAL_INDICES,
     compute_signed_distance,
@@ -33,10 +44,12 @@ from portrait_map_lab.models import (
     DensityResult,
     ETFConfig,
     ETFResult,
+    ExportManifest,
+    ExportMapEntry,
     FlowConfig,
     FlowResult,
-    LICConfig,
     LandmarkResult,
+    LICConfig,
     LuminanceConfig,
     PipelineConfig,
     PipelineResult,
@@ -56,7 +69,13 @@ from portrait_map_lab.pipelines import (
     save_pipeline_outputs,
 )
 from portrait_map_lab.remap import remap_influence
-from portrait_map_lab.storage import ensure_output_dir, load_image, save_array, save_image
+from portrait_map_lab.storage import (
+    ensure_output_dir,
+    load_image,
+    save_array,
+    save_binary_map,
+    save_image,
+)
 from portrait_map_lab.viz import (
     colorize_map,
     draw_contour,
@@ -80,6 +99,11 @@ __all__ = [
     "save_contour_outputs",
     "save_density_outputs",
     "save_flow_outputs",
+    # Export functions
+    "build_export_bundle",
+    "save_export_bundle",
+    "export_composed_result",
+    "ExportBundle",
     # Core data models
     "ComposeConfig",
     "ComposedResult",
@@ -88,6 +112,8 @@ __all__ = [
     "DensityResult",
     "ETFConfig",
     "ETFResult",
+    "ExportManifest",
+    "ExportMapEntry",
     "FlowConfig",
     "FlowResult",
     "LICConfig",
@@ -133,6 +159,7 @@ __all__ = [
     "load_image",
     "save_image",
     "save_array",
+    "save_binary_map",
     "ensure_output_dir",
     # Visualization utilities
     "draw_landmarks",

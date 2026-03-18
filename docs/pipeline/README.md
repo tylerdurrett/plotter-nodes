@@ -24,6 +24,11 @@ Generates distance maps based on the face boundary:
 
 6. **[Face Contour Distance Map](06-face-contour.md)** - Compute signed distance fields from face oval contour with directional control
 
+### Export
+Packages algorithm inputs for cross-language consumption:
+
+12. **[Export Bundle](12-export-bundle.md)** - Generate raw float32 binary files + JSON manifest for TypeScript plotter repo
+
 ## Quick Start
 
 ### Feature Pipeline
@@ -198,8 +203,11 @@ uv run python scripts/run_pipeline.py features portrait.jpg
 # Run contour pipeline only
 uv run python scripts/run_pipeline.py contour portrait.jpg --direction inward
 
-# Run both pipelines
+# Run all pipelines
 uv run python scripts/run_pipeline.py all portrait.jpg
+
+# Run all pipelines + generate export bundle for TypeScript
+uv run python scripts/run_pipeline.py all portrait.jpg --export
 
 # Custom configuration
 uv run python scripts/run_pipeline.py contour portrait.jpg \
@@ -215,6 +223,9 @@ output/
   <image_name>/
     features/     # Feature pipeline outputs
     contour/      # Contour pipeline outputs
+    density/      # Density composition outputs
+    flow/         # Flow field outputs
+    export/       # Export bundle (with --export flag)
 ```
 
 ## Extensions

@@ -14,6 +14,8 @@ __all__ = [
     "DensityResult",
     "ETFConfig",
     "ETFResult",
+    "ExportManifest",
+    "ExportMapEntry",
     "FlowConfig",
     "FlowResult",
     "LandmarkResult",
@@ -267,3 +269,27 @@ class ComposedResult:
     density_result: DensityResult
     flow_result: FlowResult
     lic_image: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class ExportMapEntry:
+    """Metadata for one exported binary map."""
+
+    filename: str
+    key: str
+    dtype: str
+    shape: tuple[int, int]
+    value_range: tuple[float, float]
+    description: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExportManifest:
+    """Manifest describing a complete export bundle."""
+
+    version: int
+    source_image: str
+    width: int
+    height: int
+    created_at: str
+    maps: tuple[ExportMapEntry, ...]

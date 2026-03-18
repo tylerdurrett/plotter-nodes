@@ -42,6 +42,24 @@ def save_array(array: np.ndarray, path: str | Path) -> None:
     np.save(str(path), array)
 
 
+def save_binary_map(data: bytes, path: str | Path) -> None:
+    """Save raw binary data to disk.
+
+    Creates parent directories if they don't exist. Intended for writing
+    raw float32 binary maps for cross-language consumption.
+
+    Parameters
+    ----------
+    data
+        Raw bytes to write.
+    path
+        Path where the file should be saved.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
 def load_image(path: str | Path) -> np.ndarray:
     """Load an image from disk using OpenCV.
 
