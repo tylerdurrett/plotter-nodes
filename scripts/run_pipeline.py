@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from portrait_map_lab.models import (
@@ -1056,8 +1057,9 @@ def main() -> int:
         height, width = image.shape[:2]
         logger.info("Image dimensions: %dx%d", width, height)
 
-        # Extract image name for output subdirectory
-        image_name = args.image_path.stem
+        # Extract image name for output subdirectory, prefixed with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_name = f"{timestamp}_{args.image_path.stem}"
 
         # Route to appropriate handler based on subcommand
         if args.pipeline == "features":
