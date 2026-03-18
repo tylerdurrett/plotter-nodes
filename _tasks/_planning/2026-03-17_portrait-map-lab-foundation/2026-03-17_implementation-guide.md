@@ -351,27 +351,29 @@ plotter-nodes/
 
 ### 6.1 Pipeline Module
 
-- [ ] Create `pipelines.py` with `from __future__ import annotations`
-- [ ] Implement `run_feature_distance_pipeline(image: np.ndarray, config: PipelineConfig | None = None) -> PipelineResult`:
+- [x] Create `pipelines.py` with `from __future__ import annotations`
+- [x] Implement `run_feature_distance_pipeline(image: np.ndarray, config: PipelineConfig | None = None) -> PipelineResult`:
   - Default config if None provided
   - Call each module in sequence: landmarks → regions → masks → distance → remap → combine
   - Return `PipelineResult` with all intermediate data
-- [ ] Implement `save_pipeline_outputs(result: PipelineResult, image: np.ndarray, output_dir: Path) -> None`:
+- [x] Implement `save_pipeline_outputs(result: PipelineResult, image: np.ndarray, output_dir: Path) -> None`:
   - Save all outputs per the output directory structure in the feature description
   - Use `viz.py` for colormaps and contact sheet
   - Use `storage.py` for file I/O
-- [ ] Write `tests/test_pipelines.py`:
+- [x] Write `tests/test_pipelines.py`:
   - Test: `run_feature_distance_pipeline` returns `PipelineResult` with all expected fields populated
   - Test: all masks, distance fields, and influence maps have correct shapes
   - Test: combined map is in [0.0, 1.0]
   - Test: pipeline with default config runs without errors on test image
   - Test: `save_pipeline_outputs` creates expected files in a temp directory
 
+> **Note:** Implementation complete with 12 comprehensive tests covering all acceptance criteria. Pipeline handles edge cases gracefully including missing eye masks (uses fallback to single eye or empty distance field). All output files are generated correctly following the exact structure from the feature description. Manual testing confirmed with real portrait image producing all expected outputs.
+
 **Acceptance Criteria:**
-- Pipeline runs end-to-end on test image with default config
-- `PipelineResult` contains all expected intermediate data
-- All output files are created in correct directory structure
-- Tests pass: `uv run pytest tests/test_pipelines.py`
+- Pipeline runs end-to-end on test image with default config ✓
+- `PipelineResult` contains all expected intermediate data ✓
+- All output files are created in correct directory structure ✓
+- Tests pass: `uv run pytest tests/test_pipelines.py` ✓ (12 tests pass)
 
 ### 6.2 CLI Script
 
