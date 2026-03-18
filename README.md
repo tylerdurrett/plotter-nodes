@@ -1,14 +1,20 @@
 # Portrait Map Lab
 
-Portrait feature distance mapping pipeline for pen plotter artwork.
+A Python-based map and analysis lab for generative plotter drawing.
 
 ## Overview
 
-Portrait Map Lab generates **portrait analysis maps** — distance fields and influence maps derived from facial features — that support algorithmic continuous-line drawing systems for SVG and pen-plotter output.
+Portrait Map Lab is a **research and prototyping environment** for building the upstream visual intelligence needed by creative-code drawing algorithms in a separate TypeScript plotter repo. It generates portrait analysis maps — importance maps, density targets, structural guidance maps, and other derived representations — that will eventually drive line, shading, and mark-making systems for pen plotting.
 
-The long-term vision is a system where accumulated line density creates tone while remaining structurally tied to the form of the subject. This repository is the **Stage 1 map-generation lab** for that larger system, focused on building reusable pipelines for deriving density and importance maps from portraits.
+This repo is **not** the final plotter runtime or drawing engine. It is the place to explore and develop the maps, signals, and analysis layers that more advanced algorithms will depend on. Over time, outputs may be wrapped as ComfyUI nodes and/or exported for use in the TypeScript plotter system.
 
-The first map family centers on **distance and influence relative to the eyes and mouth**.
+The current focus is **Stage 1**: building foundational portrait analysis maps, starting with distance fields and influence maps derived from facial features (eyes, mouth, face contour).
+
+## Vision & Roadmap
+
+The larger goal is a family of creative-code drawing algorithms for pen plotting — continuous-line portraits, density-based shading, form-following strokes, and other experimental approaches. This repo supports that work by providing the upstream analysis and prototyping layer, especially where Python tools (MediaPipe, scientific Python, image processing) make exploration easier.
+
+See [docs/vision.md](docs/vision.md) for the full vision, the 7-stage development roadmap, and how this repo relates to the broader plotter system.
 
 ## What it produces
 
