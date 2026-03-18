@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from portrait_map_lab.combine import combine_maps
+from portrait_map_lab.complexity_map import compute_complexity_map
 from portrait_map_lab.compose import build_density_target
 from portrait_map_lab.distance_fields import compute_distance_field
 from portrait_map_lab.etf import compute_etf
@@ -28,18 +29,14 @@ from portrait_map_lab.flow_fields import (
     compute_blend_weight,
     compute_contour_flow,
 )
+from portrait_map_lab.flow_speed import compute_flow_speed
 from portrait_map_lab.landmarks import detect_landmarks
 from portrait_map_lab.lic import compute_lic
-from portrait_map_lab.segmentation import (
-    SEGMENTATION_ACCESSORIES,
-    SEGMENTATION_FACE_SKIN,
-    SEGMENTATION_HAIR,
-    extract_segmentation_polygon,
-    segment_image,
-)
 from portrait_map_lab.luminance import compute_tonal_target
 from portrait_map_lab.masks import build_region_masks
 from portrait_map_lab.models import (
+    ComplexityConfig,
+    ComplexityResult,
     ComposeConfig,
     ComposedResult,
     ContourConfig,
@@ -47,12 +44,20 @@ from portrait_map_lab.models import (
     DensityResult,
     FlowConfig,
     FlowResult,
+    FlowSpeedConfig,
     LandmarkResult,
     LICConfig,
     PipelineConfig,
     PipelineResult,
 )
 from portrait_map_lab.remap import remap_influence
+from portrait_map_lab.segmentation import (
+    SEGMENTATION_ACCESSORIES,
+    SEGMENTATION_FACE_SKIN,
+    SEGMENTATION_HAIR,
+    extract_segmentation_polygon,
+    segment_image,
+)
 from portrait_map_lab.storage import save_array, save_image
 from portrait_map_lab.viz import (
     colorize_map,
@@ -652,15 +657,124 @@ def save_density_outputs(
     logger.info("All density outputs saved successfully")
 
 
+def run_complexity_pipeline(
+    image: np.ndarray,
+    config: ComplexityConfig | None = None,
+    mask: np.ndarray | None = None,
+) -> ComplexityResult:
+    """Run the complexity map computation pipeline.
+
+    Computes local image complexity using gradient, Laplacian, or multiscale metrics.
+    The complexity map can be used for flow speed modulation.
+
+    Parameters
+    ----------
+    image
+        BGR uint8 image array (as loaded by cv2.imread).
+    config
+        Configuration for complexity computation. If None, uses default configuration.
+    mask
+        Optional mask to restrict complexity computation to specific regions.
+
+    Returns
+    -------
+    ComplexityResult
+        Result containing raw and normalized complexity maps.
+    """
+    if config is None:
+        config = ComplexityConfig()
+
+    logger.info("Starting complexity pipeline (metric: %s)...", config.metric)
+
+    # Compute complexity map
+    result = compute_complexity_map(image, config, mask)
+
+    logger.info("Complexity pipeline completed successfully")
+
+    return result
+
+
+def save_complexity_outputs(
+    result: ComplexityResult,
+    output_dir: Path,
+    image: np.ndarray | None = None,
+) -> None:
+    """Save all complexity pipeline outputs to the specified directory.
+
+    Creates the following output structure:
+    ```
+    output_dir/complexity/
+        <metric>_energy.png        # Raw complexity heatmap
+        <metric>_energy_raw.npy    # Raw complexity array
+        complexity.png             # Normalized complexity heatmap
+        complexity_raw.npy         # Normalized complexity array
+        contact_sheet.png          # Combined visualization
+    ```
+
+    Parameters
+    ----------
+    result
+        Complete complexity pipeline result to save.
+    output_dir
+        Directory to save outputs to (will be created if needed).
+    image
+        Original input image for the contact sheet. Optional.
+    """
+    # Create complexity subdirectory
+    complexity_dir = Path(output_dir) / "complexity"
+    complexity_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Saving complexity outputs to %s", complexity_dir)
+
+    # Save raw complexity heatmap (colorized with viridis)
+    raw_img = colorize_map(result.raw_complexity / result.raw_complexity.max()
+                           if result.raw_complexity.max() > 0 else result.raw_complexity,
+                           colormap="viridis")
+    save_image(raw_img, complexity_dir / f"{result.metric}_energy.png")
+
+    # Save raw complexity array
+    save_array(result.raw_complexity, complexity_dir / f"{result.metric}_energy_raw.npy")
+
+    # Save normalized complexity heatmap (colorized with inferno)
+    complexity_img = colorize_map(result.complexity, colormap="inferno")
+    save_image(complexity_img, complexity_dir / "complexity.png")
+
+    # Save normalized complexity array
+    save_array(result.complexity, complexity_dir / "complexity_raw.npy")
+
+    # Build contact sheet
+    contact_images = {}
+
+    if image is not None:
+        # Resize input image to match complexity map dimensions if needed
+        if image.shape[:2] != result.complexity.shape:
+            contact_images["Input"] = cv2.resize(image,
+                                                 (result.complexity.shape[1],
+                                                  result.complexity.shape[0]))
+        else:
+            contact_images["Input"] = image
+
+    contact_images[f"{result.metric.title()} Energy"] = raw_img
+    contact_images["Normalized Complexity"] = complexity_img
+
+    contact_sheet = make_contact_sheet(contact_images, columns=3)
+    save_image(contact_sheet, complexity_dir / "contact_sheet.png")
+
+    logger.info("All complexity outputs saved successfully")
+
+
 def run_flow_pipeline(
     image: np.ndarray,
     contour_result: ContourResult,
     config: FlowConfig | None = None,
+    complexity_result: ComplexityResult | None = None,
+    speed_config: FlowSpeedConfig | None = None,
 ) -> FlowResult:
     """Run the flow field computation pipeline.
 
     Combines Edge Tangent Fields (ETF) from image gradients with contour-based
     flow to create a blended flow field for particle trajectory guidance.
+    Optionally computes flow speed from complexity map.
 
     Parameters
     ----------
@@ -670,12 +784,16 @@ def run_flow_pipeline(
         Pre-computed contour pipeline result containing signed distance field.
     config
         Configuration for flow field computation. If None, uses default configuration.
+    complexity_result
+        Optional pre-computed complexity result for flow speed modulation.
+    speed_config
+        Configuration for flow speed derivation. If None, uses default configuration.
 
     Returns
     -------
     FlowResult
         Complete flow pipeline result with ETF, contour flow, blend weights,
-        and final blended flow field.
+        final blended flow field, and optional flow speed.
 
     Raises
     ------
@@ -723,6 +841,14 @@ def run_flow_pipeline(
         fallback_threshold=config.fallback_threshold,
     )
 
+    # Step 6: Compute flow speed from complexity if provided
+    flow_speed = None
+    if complexity_result is not None:
+        logger.info("Computing flow speed from complexity map...")
+        flow_speed = compute_flow_speed(complexity_result.complexity, speed_config)
+        logger.info("Flow speed computed (min=%.2f, max=%.2f)",
+                   flow_speed.min(), flow_speed.max())
+
     logger.info("Flow field pipeline completed successfully")
 
     return FlowResult(
@@ -732,6 +858,7 @@ def run_flow_pipeline(
         blend_weight=blend_weight,
         flow_x=flow_x,
         flow_y=flow_y,
+        flow_speed=flow_speed,
     )
 
 
@@ -833,6 +960,16 @@ def save_flow_outputs(
     save_array(result.flow_x, flow_dir / "flow_x_raw.npy")
     save_array(result.flow_y, flow_dir / "flow_y_raw.npy")
 
+    # Save flow speed if computed
+    if result.flow_speed is not None:
+        # Save flow speed heatmap
+        speed_img = colorize_map(result.flow_speed, colormap="plasma")
+        save_image(speed_img, flow_dir / "flow_speed.png")
+
+        # Save raw flow speed array
+        save_array(result.flow_speed, flow_dir / "flow_speed_raw.npy")
+        logger.info("Saved flow speed outputs")
+
     # Build enhanced contact sheet with all visualizations
     contact_images = {}
     if image is not None:
@@ -847,6 +984,10 @@ def save_flow_outputs(
 
     if image is not None:
         contact_images["LIC Overlay"] = lic_overlay
+
+    # Add flow speed to contact sheet if available
+    if result.flow_speed is not None:
+        contact_images["Flow Speed"] = speed_img
 
     contact_sheet = make_contact_sheet(contact_images, columns=4)
     save_image(contact_sheet, flow_dir / "contact_sheet.png")
@@ -999,11 +1140,14 @@ def run_all_pipelines(
     compose_config: ComposeConfig | None = None,
     flow_config: FlowConfig | None = None,
     lic_config: LICConfig | None = None,
+    complexity_config: ComplexityConfig | None = None,
+    speed_config: FlowSpeedConfig | None = None,
 ) -> ComposedResult:
     """Run all pipelines in sequence, sharing landmarks for efficiency.
 
     This is the main entry point for the complete portrait processing workflow.
     Landmarks are detected once and shared across all pipeline stages.
+    When complexity is enabled, it's computed after contour and used for flow speed.
 
     Parameters
     ----------
@@ -1019,6 +1163,11 @@ def run_all_pipelines(
         Configuration for flow field computation. If None, uses defaults.
     lic_config
         Configuration for LIC visualization. If None, uses defaults.
+    complexity_config
+        Optional configuration for complexity computation. If None, complexity is skipped.
+    speed_config
+        Optional configuration for flow speed derivation. If None, uses defaults when
+        complexity is enabled.
 
     Returns
     -------
@@ -1027,7 +1176,8 @@ def run_all_pipelines(
         - feature_result: Feature distance pipeline results
         - contour_result: Contour pipeline results
         - density_result: Density composition results
-        - flow_result: Flow field computation results
+        - complexity_result: Optional complexity computation results
+        - flow_result: Flow field computation results (with optional speed)
         - lic_image: Line Integral Convolution visualization
 
     Raises
@@ -1061,13 +1211,24 @@ def run_all_pipelines(
     )
     logger.info("Density pipeline completed")
 
-    # Step 5: Run flow pipeline using contour result
-    logger.info("\n--- Stage 4: Flow Field Pipeline ---")
-    flow_result = run_flow_pipeline(image, contour_result, flow_config)
+    # Step 5: Optionally run complexity pipeline using contour mask
+    complexity_result = None
+    if complexity_config is not None:
+        logger.info("\n--- Stage 4: Complexity Map Pipeline ---")
+        # Use filled mask from contour result to restrict complexity to face region
+        mask = contour_result.filled_mask if contour_result.filled_mask is not None else None
+        complexity_result = run_complexity_pipeline(image, complexity_config, mask)
+        logger.info("Complexity pipeline completed")
+
+    # Step 6: Run flow pipeline using contour result and optional complexity
+    logger.info("\n--- Stage %d: Flow Field Pipeline ---", 5 if complexity_result else 4)
+    flow_result = run_flow_pipeline(
+        image, contour_result, flow_config, complexity_result, speed_config
+    )
     logger.info("Flow pipeline completed")
 
-    # Step 6: Compute LIC visualization from flow field
-    logger.info("\n--- Stage 5: LIC Visualization ---")
+    # Step 7: Compute LIC visualization from flow field
+    logger.info("\n--- Stage %d: LIC Visualization ---", 6 if complexity_result else 5)
     logger.info("Computing Line Integral Convolution...")
     lic_image = compute_lic(flow_result.flow_x, flow_result.flow_y, lic_config)
     logger.info("LIC visualization completed")
@@ -1081,6 +1242,7 @@ def run_all_pipelines(
         density_result=density_result,
         flow_result=flow_result,
         lic_image=lic_image,
+        complexity_result=complexity_result,
     )
 
 
@@ -1100,8 +1262,10 @@ def save_all_outputs(
             contour overlay, masks, distance fields, influence map, etc.
         density/
             luminance, CLAHE, tonal target, importance, density target, etc.
+        complexity/  (optional)
+            <metric>_energy.png, complexity.png, raw arrays, etc.
         flow/
-            ETF coherence, flow fields, LIC visualization, etc.
+            ETF coherence, flow fields, LIC visualization, flow speed, etc.
     ```
 
     Parameters
@@ -1129,6 +1293,11 @@ def save_all_outputs(
     # Save density pipeline outputs
     logger.info("Saving density outputs...")
     save_density_outputs(result.density_result, output_dir, image)
+
+    # Save complexity pipeline outputs if present
+    if result.complexity_result is not None:
+        logger.info("Saving complexity outputs...")
+        save_complexity_outputs(result.complexity_result, output_dir, image)
 
     # Save flow pipeline outputs
     logger.info("Saving flow outputs...")

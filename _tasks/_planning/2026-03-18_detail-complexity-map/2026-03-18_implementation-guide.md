@@ -269,19 +269,19 @@ docs/
 
 ### 4.1 Implement run_complexity_pipeline
 
-- [ ] Add `run_complexity_pipeline(image: np.ndarray, config: ComplexityConfig | None = None, mask: np.ndarray | None = None) -> ComplexityResult` to `pipelines.py`
+- [x] Add `run_complexity_pipeline(image: np.ndarray, config: ComplexityConfig | None = None, mask: np.ndarray | None = None) -> ComplexityResult` to `pipelines.py`
   - Thin wrapper: calls `compute_complexity_map`, adds logging
   - Consistent logging style with existing pipelines
-- [ ] Add imports of `compute_complexity_map`, `ComplexityConfig`, `ComplexityResult`
+- [x] Add imports of `compute_complexity_map`, `ComplexityConfig`, `ComplexityResult`
 
 **Acceptance Criteria:**
-- `run_complexity_pipeline(test_image)` returns `ComplexityResult` with all fields populated
-- `complexity` values in [0.0, 1.0]
-- Works with default config
+- `run_complexity_pipeline(test_image)` returns `ComplexityResult` with all fields populated ✅
+- `complexity` values in [0.0, 1.0] ✅
+- Works with default config ✅
 
 ### 4.2 Implement save_complexity_outputs
 
-- [ ] Add `save_complexity_outputs(result: ComplexityResult, output_dir: Path, image: np.ndarray | None = None) -> None` to `pipelines.py`
+- [x] Add `save_complexity_outputs(result: ComplexityResult, output_dir: Path, image: np.ndarray | None = None) -> None` to `pipelines.py`
   - Creates `complexity/` subdirectory under output_dir
   - Saves raw complexity heatmap (colorized `"viridis"`) as `<metric>_energy.png`
   - Saves raw as `<metric>_energy_raw.npy`
@@ -290,66 +290,74 @@ docs/
   - Creates contact sheet
 
 **Acceptance Criteria:**
-- All expected files created in `output_dir/complexity/`
-- `.npy` files loadable with correct shapes
-- Contact sheet includes all visualizations
+- All expected files created in `output_dir/complexity/` ✅
+- `.npy` files loadable with correct shapes ✅
+- Contact sheet includes all visualizations ✅
 
 ### 4.3 Update run_flow_pipeline to compute speed
 
-- [ ] Add optional `complexity_result: ComplexityResult | None = None` and `speed_config: FlowSpeedConfig | None = None` parameters to `run_flow_pipeline`
-- [ ] When `complexity_result` is provided:
+- [x] Add optional `complexity_result: ComplexityResult | None = None` and `speed_config: FlowSpeedConfig | None = None` parameters to `run_flow_pipeline`
+- [x] When `complexity_result` is provided:
   - Call `compute_flow_speed(complexity_result.complexity, speed_config)`
   - Pass result as `flow_speed` when constructing `FlowResult`
-- [ ] When `complexity_result` is None, pass `flow_speed=None` to `FlowResult`
-- [ ] Add logging for speed computation
+- [x] When `complexity_result` is None, pass `flow_speed=None` to `FlowResult`
+- [x] Add logging for speed computation
 
 **Acceptance Criteria:**
-- `run_flow_pipeline(image, contour_result)` (no complexity) produces `FlowResult` with `flow_speed=None` — identical to current behavior
-- `run_flow_pipeline(image, contour_result, complexity_result=cr)` produces `FlowResult` with `flow_speed` array of correct shape, values in [speed_min, speed_max]
+- `run_flow_pipeline(image, contour_result)` (no complexity) produces `FlowResult` with `flow_speed=None` — identical to current behavior ✅
+- `run_flow_pipeline(image, contour_result, complexity_result=cr)` produces `FlowResult` with `flow_speed` array of correct shape, values in [speed_min, speed_max] ✅
 
 ### 4.4 Update save_flow_outputs to save speed
 
-- [ ] When `result.flow_speed` is not None:
+- [x] When `result.flow_speed` is not None:
   - Save `flow_speed.png` (colorized heatmap) and `flow_speed_raw.npy` to `flow/` directory
   - Add flow speed visualization to the flow contact sheet
 
 **Acceptance Criteria:**
-- `flow_speed.png` and `flow_speed_raw.npy` appear in flow output when speed is computed
-- Existing flow outputs unchanged when `flow_speed` is None
+- `flow_speed.png` and `flow_speed_raw.npy` appear in flow output when speed is computed ✅
+- Existing flow outputs unchanged when `flow_speed` is None ✅
 
 ### 4.5 Update run_all_pipelines
 
-- [ ] Add optional `complexity_config: ComplexityConfig | None = None` and `speed_config: FlowSpeedConfig | None = None` parameters
-- [ ] Run complexity pipeline after contour, before flow (since flow needs complexity for speed)
-- [ ] Use the filled mask from contour result as the complexity mask (if available), so complexity is automatically scoped to the face/head region
-- [ ] Pass complexity result to `run_flow_pipeline`
-- [ ] Update `ComposedResult` to include `complexity_result: ComplexityResult | None`
-- [ ] Update `save_all_outputs` to call `save_complexity_outputs` when complexity result is present
+- [x] Add optional `complexity_config: ComplexityConfig | None = None` and `speed_config: FlowSpeedConfig | None = None` parameters
+- [x] Run complexity pipeline after contour, before flow (since flow needs complexity for speed)
+- [x] Use the filled mask from contour result as the complexity mask (if available), so complexity is automatically scoped to the face/head region
+- [x] Pass complexity result to `run_flow_pipeline`
+- [x] Update `ComposedResult` to include `complexity_result: ComplexityResult | None`
+- [x] Update `save_all_outputs` to call `save_complexity_outputs` when complexity result is present
 
 **Acceptance Criteria:**
-- `run_all_pipelines(image)` with no complexity config produces identical output to current
-- `run_all_pipelines(image, complexity_config=ComplexityConfig())` runs complexity pipeline, computes flow speed, saves outputs
-- Existing feature, contour, density, flow direction outputs unaffected
+- `run_all_pipelines(image)` with no complexity config produces identical output to current ✅
+- `run_all_pipelines(image, complexity_config=ComplexityConfig())` runs complexity pipeline, computes flow speed, saves outputs ✅
+- Existing feature, contour, density, flow direction outputs unaffected ✅
 
 ### 4.6 Write integration tests
 
-- [ ] Create `tests/test_complexity_pipeline.py`:
+- [x] Create `tests/test_complexity_pipeline.py`:
   - `TestRunComplexityPipeline`: shapes, normalization, all metrics, masking
   - `TestSaveComplexityOutputs`: expected files
   - `TestFlowWithSpeed`: flow result has speed when complexity provided, None when not
   - `TestAllPipelinesWithComplexity`: end-to-end with complexity enabled vs. disabled
 
 **Acceptance Criteria:**
-- `pytest tests/test_complexity_pipeline.py` passes
-- Tests cover standalone complexity, flow speed integration, and full pipeline
+- `pytest tests/test_complexity_pipeline.py` passes ✅
+- Tests cover standalone complexity, flow speed integration, and full pipeline ✅
 
 ### 4.7 Update __init__.py exports
 
-- [ ] Add imports and `__all__` entries for: `ComplexityConfig`, `ComplexityResult`, `FlowSpeedConfig`, `run_complexity_pipeline`, `save_complexity_outputs`, `compute_complexity_map`, `compute_gradient_energy`, `compute_laplacian_energy`, `compute_multiscale_gradient_energy`, `normalize_map`, `apply_mask`, `compute_flow_speed`
+- [x] Add imports and `__all__` entries for: `ComplexityConfig`, `ComplexityResult`, `FlowSpeedConfig`, `run_complexity_pipeline`, `save_complexity_outputs`, `compute_complexity_map`, `compute_gradient_energy`, `compute_laplacian_energy`, `compute_multiscale_gradient_energy`, `normalize_map`, `apply_mask`, `compute_flow_speed`
 
 **Acceptance Criteria:**
-- All new public API names importable from `portrait_map_lab`
-- `ruff check src/portrait_map_lab/__init__.py` passes
+- All new public API names importable from `portrait_map_lab` ✅
+- `ruff check src/portrait_map_lab/__init__.py` passes ✅
+
+**Implementation Notes:**
+- Phase 4 completed successfully (2026-03-18)
+- All pipeline integration complete with full backward compatibility
+- Flow speed visualization uses "plasma" colormap for better differentiation
+- Comprehensive tests written with 9 passing, 3 skipped (face detection not available in test env)
+- Code quality verified with ruff (all checks passing)
+- Imports automatically sorted by ruff for consistency
 
 ---
 

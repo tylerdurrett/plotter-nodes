@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 from portrait_map_lab.combine import combine_maps
+from portrait_map_lab.complexity_map import (
+    apply_mask,
+    compute_complexity_map,
+    compute_gradient_energy,
+    compute_laplacian_energy,
+    compute_multiscale_gradient_energy,
+    normalize_map,
+)
 from portrait_map_lab.compose import build_density_target, compose_maps
 from portrait_map_lab.distance_fields import compute_distance_field
 from portrait_map_lab.etf import (
@@ -34,11 +42,14 @@ from portrait_map_lab.flow_fields import (
     compute_blend_weight,
     compute_contour_flow,
 )
+from portrait_map_lab.flow_speed import compute_flow_speed
 from portrait_map_lab.landmarks import detect_landmarks
 from portrait_map_lab.lic import compute_lic
 from portrait_map_lab.luminance import apply_clahe, compute_tonal_target, extract_luminance
 from portrait_map_lab.masks import build_region_masks
 from portrait_map_lab.models import (
+    ComplexityConfig,
+    ComplexityResult,
     ComposeConfig,
     ComposedResult,
     ContourConfig,
@@ -50,6 +61,7 @@ from portrait_map_lab.models import (
     ExportMapEntry,
     FlowConfig,
     FlowResult,
+    FlowSpeedConfig,
     LandmarkResult,
     LICConfig,
     LuminanceConfig,
@@ -60,11 +72,13 @@ from portrait_map_lab.models import (
 )
 from portrait_map_lab.pipelines import (
     run_all_pipelines,
+    run_complexity_pipeline,
     run_contour_pipeline,
     run_density_pipeline,
     run_feature_distance_pipeline,
     run_flow_pipeline,
     save_all_outputs,
+    save_complexity_outputs,
     save_contour_outputs,
     save_density_outputs,
     save_flow_outputs,
@@ -105,11 +119,13 @@ __all__ = [
     "run_feature_distance_pipeline",
     "run_contour_pipeline",
     "run_density_pipeline",
+    "run_complexity_pipeline",
     "run_flow_pipeline",
     "save_all_outputs",
     "save_pipeline_outputs",
     "save_contour_outputs",
     "save_density_outputs",
+    "save_complexity_outputs",
     "save_flow_outputs",
     # Export functions
     "build_export_bundle",
@@ -119,6 +135,8 @@ __all__ = [
     # Core data models
     "ComposeConfig",
     "ComposedResult",
+    "ComplexityConfig",
+    "ComplexityResult",
     "ContourConfig",
     "ContourResult",
     "DensityResult",
@@ -128,6 +146,7 @@ __all__ = [
     "ExportMapEntry",
     "FlowConfig",
     "FlowResult",
+    "FlowSpeedConfig",
     "LICConfig",
     "LandmarkResult",
     "LuminanceConfig",
@@ -150,6 +169,13 @@ __all__ = [
     "compute_tonal_target",
     "compose_maps",
     "build_density_target",
+    # Complexity map functions
+    "compute_complexity_map",
+    "compute_gradient_energy",
+    "compute_laplacian_energy",
+    "compute_multiscale_gradient_energy",
+    "normalize_map",
+    "apply_mask",
     # ETF functions
     "compute_structure_tensor",
     "extract_tangent_field",
@@ -160,6 +186,8 @@ __all__ = [
     "align_tangent_field",
     "compute_blend_weight",
     "blend_flow_fields",
+    # Flow speed
+    "compute_flow_speed",
     # LIC visualization
     "compute_lic",
     # Processing functions

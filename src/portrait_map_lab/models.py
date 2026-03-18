@@ -305,6 +305,7 @@ class ComposedResult:
     density_result: DensityResult
     flow_result: FlowResult
     lic_image: np.ndarray
+    complexity_result: ComplexityResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
