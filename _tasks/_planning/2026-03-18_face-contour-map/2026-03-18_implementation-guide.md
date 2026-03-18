@@ -294,27 +294,40 @@ The `all` subcommand produces both subdirectories side by side.
 
 **Rationale:** Sequenced after all code is working and tested so documentation reflects the actual implementation.
 
-### 6.1 Create face contour pipeline documentation
+### 6.1 Create face contour pipeline documentation ✅
 
-- [ ] Create `docs/pipeline/06-face-contour.md` following the existing stage document conventions (Overview, Purpose, Implementation, Process Flow with ASCII diagram, Output Format, Configuration, Quality Considerations, Visualization sections)
-- [ ] Cover: face oval landmarks, contour vs filled masks, signed distance field, direction modes, influence remapping
-- [ ] Include code examples for standalone function usage and pipeline usage
-- [ ] Include ASCII data flow diagram specific to the contour pipeline
-
-**Acceptance Criteria:**
-- Document follows the same section structure as existing stage docs (01-05)
-- Includes process flow diagram, code examples, configuration table, and output format description
-- Direction modes are clearly documented with use cases
-
-### 6.2 Update pipeline README and architecture
-
-- [ ] Update `docs/pipeline/README.md`: add face contour to the pipeline stages list, add a contour pipeline quick start example, update the data flow diagram to show the contour branch, add contour config parameters to the configuration table
-- [ ] Update `docs/pipeline/architecture.md`: add `face_contour.py` to the module responsibility table, add `ContourConfig`/`ContourResult` to data structures section, update extension points to reference the contour pipeline as a concrete example
+- [x] Create `docs/pipeline/06-face-contour.md` following the existing stage document conventions (Overview, Purpose, Implementation, Process Flow with ASCII diagram, Output Format, Configuration, Quality Considerations, Visualization sections)
+- [x] Cover: face oval landmarks, contour vs filled masks, signed distance field, direction modes, influence remapping
+- [x] Include code examples for standalone function usage and pipeline usage
+- [x] Include ASCII data flow diagram specific to the contour pipeline
 
 **Acceptance Criteria:**
-- Pipeline README lists the contour pipeline alongside the feature pipeline
-- Architecture doc includes the new module and data structures
-- Quick start example for contour pipeline is present and accurate
+- Document follows the same section structure as existing stage docs (01-05) ✅
+- Includes process flow diagram, code examples, configuration table, and output format description ✅
+- Direction modes are clearly documented with use cases ✅
+
+**Implementation Notes:**
+- Created comprehensive 397-line documentation file covering all aspects of the contour pipeline
+- Included detailed sections on mathematical foundation, direction modes, and integration with feature pipeline
+- Added extensive code examples and visual interpretation guides
+- Documented both FACE_OVAL indices and convex hull approaches with clear rationale
+
+### 6.2 Update pipeline README and architecture ✅
+
+- [x] Update `docs/pipeline/README.md`: add face contour to the pipeline stages list, add a contour pipeline quick start example, update the data flow diagram to show the contour branch, add contour config parameters to the configuration table
+- [x] Update `docs/pipeline/architecture.md`: add `face_contour.py` to the module responsibility table, add `ContourConfig`/`ContourResult` to data structures section, update extension points to reference the contour pipeline as a concrete example
+
+**Acceptance Criteria:**
+- Pipeline README lists the contour pipeline alongside the feature pipeline ✅
+- Architecture doc includes the new module and data structures ✅
+- Quick start example for contour pipeline is present and accurate ✅
+
+**Implementation Notes:**
+- Updated README with parallel pipeline architecture diagram
+- Added separate configuration tables for shared, feature, and contour parameters
+- Included CLI subcommand examples and output directory structure
+- Updated architecture.md with ContourResult data structure and face_contour.py module
+- Used contour pipeline as concrete example in "Adding New Map Types" section
 
 ---
 

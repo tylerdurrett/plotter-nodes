@@ -55,11 +55,12 @@ The Portrait Map Lab pipeline implements a modular, extensible architecture for 
 |--------|---------------|--------------|---------|
 | `landmarks.py` | Face detection | MediaPipe | LandmarkResult |
 | `face_regions.py` | Region definitions | None | Polygon coordinates |
+| `face_contour.py` | Face boundary extraction | SciPy, OpenCV | Contour masks, signed distance |
 | `masks.py` | Mask rasterization | OpenCV | Binary masks |
 | `distance_fields.py` | Distance transforms | SciPy | Distance arrays |
 | `remap.py` | Influence mapping | NumPy | Influence arrays |
 | `combine.py` | Map combination | NumPy | Combined map |
-| `pipelines.py` | Orchestration | All above | PipelineResult |
+| `pipelines.py` | Orchestration | All above | PipelineResult, ContourResult |
 
 ### Support Modules
 
@@ -87,6 +88,16 @@ class PipelineResult:
     distance_fields: dict[str, np.ndarray]
     influence_maps: dict[str, np.ndarray]
     combined: np.ndarray
+
+@dataclass(frozen=True)
+class ContourResult:
+    landmarks: LandmarkResult
+    contour_polygon: np.ndarray
+    contour_mask: np.ndarray
+    filled_mask: np.ndarray
+    signed_distance: np.ndarray
+    directional_distance: np.ndarray
+    influence_map: np.ndarray
 ```
 
 ### Configuration Models
@@ -105,6 +116,14 @@ class PipelineConfig:
     regions: list[RegionDefinition]
     remap: RemapConfig
     weights: dict[str, float]
+
+@dataclass
+class ContourConfig:
+    remap: RemapConfig
+    direction: str = "inward"
+    band_width: float | None = None
+    contour_thickness: int = 1
+    output_dir: str = "output"
 ```
 
 ## Pipeline Orchestration
@@ -174,19 +193,43 @@ weights = {
 
 ### Adding New Map Types
 
+The contour pipeline demonstrates how to add new map types:
+
 1. **Create processor** module:
 ```python
-# saliency.py
-def compute_saliency_map(image: np.ndarray) -> np.ndarray:
-    # Implementation
-    return saliency_map
+# face_contour.py
+def get_face_oval_polygon(landmarks: LandmarkResult) -> np.ndarray:
+    # Extract face boundary using convex hull
+    hull = ConvexHull(landmarks.landmarks[:, :2])
+    return landmarks.landmarks[hull.vertices]
+
+def compute_signed_distance(contour_mask, filled_mask) -> np.ndarray:
+    # Compute signed distance field
+    distance = compute_distance_field(contour_mask)
+    signed = np.where(filled_mask > 0, -distance, distance)
+    return signed
 ```
 
-2. **Integrate** in pipeline:
+2. **Create pipeline function**:
 ```python
 # In pipelines.py
-saliency = compute_saliency_map(image)
-influence_maps["saliency"] = saliency
+def run_contour_pipeline(image, config=None):
+    landmarks = detect_landmarks(image)
+    polygon = get_face_oval_polygon(landmarks)
+    contour_mask = rasterize_contour_mask(polygon, image.shape[:2])
+    filled_mask = rasterize_filled_mask(polygon, image.shape[:2])
+    signed_distance = compute_signed_distance(contour_mask, filled_mask)
+    directional = prepare_directional_distance(signed_distance, config.direction)
+    influence = remap_influence(directional, config.remap)
+    return ContourResult(...)
+```
+
+3. **Add CLI subcommand**:
+```python
+# In run_pipeline.py
+subparsers = parser.add_subparsers()
+contour_parser = subparsers.add_parser('contour')
+contour_parser.add_argument('--direction', choices=['inward', 'outward', 'both', 'band'])
 ```
 
 ### Custom Remapping Curves
