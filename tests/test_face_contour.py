@@ -72,19 +72,47 @@ class TestGetFaceOvalPolygon:
         assert np.all(polygon[:, 1] >= 0)
         assert np.all(polygon[:, 1] <= h)
 
-    def test_extracts_correct_indices(self):
-        """Should extract the correct landmark points."""
+    def test_extracts_correct_indices_without_expand(self):
+        """Should extract the exact landmark points when expand=False."""
         # Create landmarks where each point has unique values
         landmarks = np.arange(478 * 2).reshape(478, 2).astype(np.float32)
         landmark_result = LandmarkResult(
             landmarks=landmarks, image_shape=(480, 640), confidence=0.95
         )
 
-        polygon = get_face_oval_polygon(landmark_result)
+        polygon = get_face_oval_polygon(landmark_result, expand=False)
 
         # Check that the extracted points match the expected indices
         for i, idx in enumerate(FACE_OVAL_INDICES):
             np.testing.assert_array_equal(polygon[i], landmarks[idx])
+
+    def test_expand_produces_more_lateral_points(self):
+        """Expanded polygon should be at least as far from centroid as base."""
+        # Create landmarks in a grid so some are further from centroid
+        landmarks = np.zeros((478, 2), dtype=np.float32)
+        # Place face oval landmarks in a circle
+        for i, idx in enumerate(FACE_OVAL_INDICES):
+            angle = 2 * np.pi * i / len(FACE_OVAL_INDICES)
+            landmarks[idx] = [320 + 100 * np.cos(angle), 240 + 100 * np.sin(angle)]
+        # Place some other landmarks further out in the same directions
+        for j in range(478):
+            if j not in FACE_OVAL_INDICES:
+                landmarks[j] = [320 + np.random.uniform(-150, 150),
+                                240 + np.random.uniform(-150, 150)]
+
+        landmark_result = LandmarkResult(
+            landmarks=landmarks, image_shape=(480, 640), confidence=0.95
+        )
+
+        base = get_face_oval_polygon(landmark_result, expand=False)
+        expanded = get_face_oval_polygon(landmark_result, expand=True)
+
+        centroid = np.mean(landmarks, axis=0)
+        base_dists = np.linalg.norm(base - centroid, axis=1)
+        expanded_dists = np.linalg.norm(expanded - centroid, axis=1)
+
+        # Expanded should be at least as far from centroid as base for every vertex
+        assert np.all(expanded_dists >= base_dists - 1e-6)
 
 
 class TestRasterizeContourMask:
