@@ -203,10 +203,133 @@ def prepare_directional_distance(
     return result
 
 
+def compute_sdf_from_polygon(
+    polygon: np.ndarray, image_shape: tuple[int, int], thickness: int = 1
+) -> np.ndarray:
+    """Compute signed distance field from a polygon in one step.
+
+    Convenience wrapper that rasterizes the contour and filled masks,
+    then computes the signed distance field.
+
+    Parameters
+    ----------
+    polygon
+        Nx2 array of polygon vertices in pixel coordinates.
+    image_shape
+        Output shape as (height, width).
+    thickness
+        Contour line thickness in pixels.
+
+    Returns
+    -------
+    np.ndarray
+        Signed distance field (float64).
+    """
+    contour_mask = rasterize_contour_mask(polygon, image_shape, thickness)
+    filled_mask = rasterize_filled_mask(polygon, image_shape)
+    return compute_signed_distance(contour_mask, filled_mask)
+
+
+def average_signed_distances(sdfs: list[np.ndarray]) -> np.ndarray:
+    """Compute the elementwise mean of multiple signed distance fields.
+
+    Parameters
+    ----------
+    sdfs
+        List of signed distance fields, each (H, W) float64.
+        All arrays must have the same shape.
+
+    Returns
+    -------
+    np.ndarray
+        Averaged signed distance field (H, W) float64.
+
+    Raises
+    ------
+    ValueError
+        If the list is empty or shapes are inconsistent.
+    """
+    if not sdfs:
+        raise ValueError("At least one signed distance field is required")
+    shape = sdfs[0].shape
+    for i, sdf in enumerate(sdfs[1:], 1):
+        if sdf.shape != shape:
+            raise ValueError(
+                f"SDF shape mismatch: sdfs[0] is {shape}, sdfs[{i}] is {sdf.shape}"
+            )
+    result = sdfs[0].astype(np.float64, copy=True)
+    for sdf in sdfs[1:]:
+        result += sdf
+    result /= len(sdfs)
+    return result
+
+
+def derive_contour_from_sdf(
+    signed_distance: np.ndarray,
+    thickness: int = 1,
+    epsilon_factor: float = 0.005,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Derive contour polygon, contour mask, and filled mask from a signed distance field.
+
+    Extracts the zero-crossing boundary of the SDF as a polygon, then
+    rasterizes the contour outline and filled interior masks.
+
+    Parameters
+    ----------
+    signed_distance
+        Signed distance field (H, W) float64 where negative = interior.
+    thickness
+        Contour line thickness in pixels.
+    epsilon_factor
+        Simplification factor for ``cv2.approxPolyDP``.
+        Set to 0 to disable simplification.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        ``(contour_polygon, contour_mask, filled_mask)`` where:
+        - contour_polygon is Nx2 float64 pixel coordinates
+        - contour_mask is (H, W) uint8 binary outline (0/255)
+        - filled_mask is (H, W) uint8 binary interior (0/255)
+
+    Raises
+    ------
+    ValueError
+        If no contour can be extracted from the SDF.
+    """
+    # Derive filled mask from negative region of SDF
+    filled_mask = (signed_distance < 0).astype(np.uint8) * 255
+
+    # Extract contour polygon from filled mask
+    contours, _ = cv2.findContours(filled_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if not contours:
+        raise ValueError("No contour found in averaged signed distance field")
+
+    contour = max(contours, key=cv2.contourArea)
+
+    # Simplify polygon
+    if epsilon_factor > 0:
+        arc_length = cv2.arcLength(contour, closed=True)
+        epsilon = epsilon_factor * arc_length
+        contour = cv2.approxPolyDP(contour, epsilon, closed=True)
+
+    # Reshape (N, 1, 2) → (N, 2) float64
+    contour_polygon = contour[:, 0, :].astype(np.float64)
+
+    # Rasterize contour mask from the derived polygon
+    contour_mask = rasterize_contour_mask(contour_polygon, signed_distance.shape, thickness)
+
+    return contour_polygon, contour_mask, filled_mask
+
+
 __all__ = [
     "get_face_oval_polygon",
     "rasterize_contour_mask",
     "rasterize_filled_mask",
     "compute_signed_distance",
     "prepare_directional_distance",
+    "compute_sdf_from_polygon",
+    "average_signed_distances",
+    "derive_contour_from_sdf",
 ]

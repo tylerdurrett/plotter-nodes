@@ -206,6 +206,17 @@ class TestContourPipeline:
         head_fill = np.sum(head_result.filled_mask > 0)
         assert head_fill >= face_fill
 
+    def test_average_method(self, test_image):
+        """Test pipeline with average contour method."""
+        config = ContourConfig(contour_method="average")
+        result = run_contour_pipeline(test_image, config)
+
+        # Average method should still detect landmarks (needed for one of the three)
+        assert result.landmarks is not None
+        assert result.contour_polygon.shape[1] == 2
+        assert result.influence_map.min() >= 0.0
+        assert result.influence_map.max() <= 1.0
+
     def test_unknown_contour_method_raises(self, test_image):
         """Unknown contour method should raise ValueError."""
         config = ContourConfig(contour_method="invalid")

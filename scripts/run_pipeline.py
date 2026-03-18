@@ -156,10 +156,11 @@ def parse_args() -> argparse.Namespace:
     contour_parser.add_argument(
         "--contour-method",
         type=str,
-        choices=["landmarks", "segmentation_face", "segmentation_head"],
+        choices=["landmarks", "segmentation_face", "segmentation_head", "average"],
         default="landmarks",
         help="Method for contour extraction: landmarks (convex hull), "
-        "segmentation_face (face skin mask), segmentation_head (hair+face+accessories)",
+        "segmentation_face (face skin mask), segmentation_head (hair+face+accessories), "
+        "average (blend of all three methods)",
     )
     contour_parser.add_argument(
         "--epsilon-factor",
@@ -339,10 +340,11 @@ def parse_args() -> argparse.Namespace:
     all_parser.add_argument(
         "--contour-method",
         type=str,
-        choices=["landmarks", "segmentation_face", "segmentation_head"],
+        choices=["landmarks", "segmentation_face", "segmentation_head", "average"],
         default="landmarks",
         help="Method for contour extraction: landmarks (convex hull), "
-        "segmentation_face (face skin mask), segmentation_head (hair+face+accessories)",
+        "segmentation_face (face skin mask), segmentation_head (hair+face+accessories), "
+        "average (blend of all three methods)",
     )
     all_parser.add_argument(
         "--epsilon-factor",

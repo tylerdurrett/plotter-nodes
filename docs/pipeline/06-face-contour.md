@@ -169,15 +169,26 @@ config = ContourConfig(contour_method="segmentation_head")
 **Advantages:** Includes hair and accessories, captures full head silhouette.
 **Limitation:** Same resolution limitation as `segmentation_face`.
 
+### `average`
+
+Runs all three methods, averages their signed distance fields, and derives the contour from the blended SDF:
+
+```python
+config = ContourConfig(contour_method="average")
+```
+
+**Advantages:** Balances the strengths of all methods — smooths out individual method artifacts.
+**Limitation:** ~3x slower since it runs all three extraction paths.
+
 ### Method Comparison
 
-| Aspect | `landmarks` | `segmentation_face` | `segmentation_head` |
-|--------|-------------|--------------------|--------------------|
-| Shape | Always convex | Non-convex, skin boundary | Non-convex, full head |
-| Coverage | Face only | Face skin only | Hair + face + accessories |
-| Resolution | Subpixel (float64 landmarks) | 256×256 upscaled | 256×256 upscaled |
-| Speed | Fast (hull only) | Slower (model inference) | Slower (model inference) |
-| Needs landmarks | Yes | No | No |
+| Aspect | `landmarks` | `segmentation_face` | `segmentation_head` | `average` |
+|--------|-------------|--------------------|--------------------|-----------|
+| Shape | Always convex | Non-convex, skin boundary | Non-convex, full head | Blended |
+| Coverage | Face only | Face skin only | Hair + face + accessories | Composite of all three |
+| Resolution | Subpixel (float64 landmarks) | 256×256 upscaled | 256×256 upscaled | Mixed |
+| Speed | Fast (hull only) | Slower (model inference) | Slower (model inference) | Slowest (~3x) |
+| Needs landmarks | Yes | No | No | Yes |
 
 ### CLI Examples
 
@@ -190,6 +201,9 @@ uv run python scripts/run_pipeline.py contour image.jpg --contour-method segment
 
 # Full head contour (hair + face + accessories)
 uv run python scripts/run_pipeline.py contour image.jpg --contour-method segmentation_head
+
+# Average of all three methods
+uv run python scripts/run_pipeline.py contour image.jpg --contour-method average
 
 # Adjust contour simplification
 uv run python scripts/run_pipeline.py contour image.jpg --contour-method segmentation_face --epsilon-factor 0.01
@@ -275,7 +289,7 @@ output/<image_name>/contour/
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `contour_method` | str | "landmarks" | Contour extraction method (landmarks/segmentation_face/segmentation_head) |
+| `contour_method` | str | "landmarks" | Contour extraction method (landmarks/segmentation_face/segmentation_head/average) |
 | `remap` | RemapConfig | RemapConfig() | Influence remapping settings |
 | `direction` | str | "inward" | Direction mode (inward/outward/both/band) |
 | `band_width` | float \| None | None | Band width for band mode (pixels) |

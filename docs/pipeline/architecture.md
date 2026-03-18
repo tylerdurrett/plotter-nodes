@@ -131,7 +131,7 @@ class PipelineConfig:
 
 @dataclass
 class ContourConfig:
-    contour_method: str = "landmarks"  # landmarks, segmentation_face, segmentation_head
+    contour_method: str = "landmarks"  # landmarks, segmentation_face, segmentation_head, average
     remap: RemapConfig
     direction: str = "inward"
     band_width: float | None = None

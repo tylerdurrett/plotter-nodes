@@ -6,7 +6,9 @@ import numpy as np
 import pytest
 
 from portrait_map_lab.face_contour import (
+    average_signed_distances,
     compute_signed_distance,
+    derive_contour_from_sdf,
     get_face_oval_polygon,
     prepare_directional_distance,
     rasterize_contour_mask,
@@ -340,3 +342,90 @@ class TestPrepareDirectionalDistance:
         result = prepare_directional_distance(self.signed_dist, mode="band", band_width=3.0)
         assert result.shape == self.signed_dist.shape
         assert result.dtype == np.float64
+
+
+class TestAverageSignedDistances:
+    """Tests for average_signed_distances function."""
+
+    def test_identical_sdfs_return_same(self):
+        """Averaging identical SDFs should return the same SDF."""
+        sdf = np.array([[1.0, -2.0], [3.0, -4.0]])
+        result = average_signed_distances([sdf, sdf, sdf])
+        np.testing.assert_array_almost_equal(result, sdf)
+
+    def test_two_sdfs_mean(self):
+        """Should compute elementwise mean of two SDFs."""
+        sdf1 = np.array([[2.0, -4.0], [6.0, -8.0]])
+        sdf2 = np.array([[4.0, -2.0], [0.0, -4.0]])
+        result = average_signed_distances([sdf1, sdf2])
+        expected = np.array([[3.0, -3.0], [3.0, -6.0]])
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_single_sdf(self):
+        """Single SDF should return itself."""
+        sdf = np.array([[1.0, -1.0], [0.0, 2.0]])
+        result = average_signed_distances([sdf])
+        np.testing.assert_array_almost_equal(result, sdf)
+
+    def test_empty_list_raises(self):
+        """Should raise ValueError for empty list."""
+        with pytest.raises(ValueError, match="At least one"):
+            average_signed_distances([])
+
+    def test_shape_mismatch_raises(self):
+        """Should raise ValueError for mismatched shapes."""
+        sdf1 = np.zeros((10, 10))
+        sdf2 = np.zeros((10, 20))
+        with pytest.raises(ValueError, match="shape mismatch"):
+            average_signed_distances([sdf1, sdf2])
+
+    def test_preserves_dtype(self):
+        """Result should be float64."""
+        sdf = np.array([[1.0, -1.0]], dtype=np.float64)
+        result = average_signed_distances([sdf, sdf])
+        assert result.dtype == np.float64
+
+
+class TestDeriveContourFromSdf:
+    """Tests for derive_contour_from_sdf function."""
+
+    def _make_circle_sdf(self, shape=(100, 100), center=(50, 50), radius=20):
+        """Create a signed distance field for a circle."""
+        h, w = shape
+        y, x = np.mgrid[:h, :w]
+        dist = np.sqrt((x - center[1]) ** 2 + (y - center[0]) ** 2) - radius
+        return dist.astype(np.float64)
+
+    def test_returns_correct_types(self):
+        """Should return (polygon, contour_mask, filled_mask) with correct types."""
+        sdf = self._make_circle_sdf()
+        polygon, contour_mask, filled_mask = derive_contour_from_sdf(sdf)
+
+        assert polygon.ndim == 2
+        assert polygon.shape[1] == 2
+        assert polygon.dtype == np.float64
+        assert contour_mask.dtype == np.uint8
+        assert filled_mask.dtype == np.uint8
+
+    def test_filled_mask_matches_sdf_interior(self):
+        """Filled mask should match negative region of SDF."""
+        sdf = self._make_circle_sdf()
+        _, _, filled_mask = derive_contour_from_sdf(sdf)
+
+        expected_interior = sdf < 0
+        actual_interior = filled_mask > 0
+        # Allow small border differences from rasterization
+        agreement = np.mean(expected_interior == actual_interior)
+        assert agreement > 0.99
+
+    def test_contour_mask_has_pixels(self):
+        """Contour mask should have nonzero pixels."""
+        sdf = self._make_circle_sdf()
+        _, contour_mask, _ = derive_contour_from_sdf(sdf)
+        assert np.sum(contour_mask > 0) > 0
+
+    def test_no_contour_raises(self):
+        """Should raise ValueError if SDF has no interior."""
+        sdf = np.ones((50, 50), dtype=np.float64)  # All positive = no interior
+        with pytest.raises(ValueError, match="No contour found"):
+            derive_contour_from_sdf(sdf)

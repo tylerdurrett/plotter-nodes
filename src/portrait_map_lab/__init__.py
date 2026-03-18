@@ -18,7 +18,10 @@ from portrait_map_lab.export import (
     save_export_bundle,
 )
 from portrait_map_lab.face_contour import (
+    average_signed_distances,
+    compute_sdf_from_polygon,
     compute_signed_distance,
+    derive_contour_from_sdf,
     get_face_oval_polygon,
     prepare_directional_distance,
     rasterize_contour_mask,
@@ -138,6 +141,9 @@ __all__ = [
     "rasterize_filled_mask",
     "compute_signed_distance",
     "prepare_directional_distance",
+    "compute_sdf_from_polygon",
+    "average_signed_distances",
+    "derive_contour_from_sdf",
     # Luminance and composition
     "extract_luminance",
     "apply_clahe",

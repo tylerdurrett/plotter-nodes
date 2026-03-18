@@ -13,7 +13,10 @@ from portrait_map_lab.compose import build_density_target
 from portrait_map_lab.distance_fields import compute_distance_field
 from portrait_map_lab.etf import compute_etf
 from portrait_map_lab.face_contour import (
+    average_signed_distances,
+    compute_sdf_from_polygon,
     compute_signed_distance,
+    derive_contour_from_sdf,
     get_face_oval_polygon,
     prepare_directional_distance,
     rasterize_contour_mask,
@@ -285,6 +288,9 @@ def run_contour_pipeline(image: np.ndarray, config: ContourConfig | None = None)
             category_mask, classes, epsilon_factor=config.epsilon_factor
         )
         image_shape = image.shape[:2]
+    elif config.contour_method == "average":
+        landmarks = detect_landmarks(image)
+        return _compute_average_contour(landmarks, image, config)
     else:
         raise ValueError(f"Unknown contour method: {config.contour_method}")
 
@@ -332,6 +338,67 @@ def _get_segmentation_classes(method: str) -> list[int]:
     elif method == "segmentation_head":
         return [SEGMENTATION_HAIR, SEGMENTATION_FACE_SKIN, SEGMENTATION_ACCESSORIES]
     raise ValueError(f"Unknown segmentation method: {method}")
+
+
+def _compute_average_contour(
+    landmarks: LandmarkResult,
+    image: np.ndarray,
+    config: ContourConfig,
+) -> ContourResult:
+    """Compute contour by averaging SDFs from all three methods.
+
+    Runs landmarks, segmentation_face, and segmentation_head, computes
+    each SDF, averages them, and derives the contour from the blended SDF.
+    """
+    image_shape = landmarks.image_shape
+    logger.info("Computing average of all three contour methods...")
+
+    # Method 1: landmarks
+    logger.info("  [1/3] Landmarks contour...")
+    poly_lm = get_face_oval_polygon(landmarks)
+    sdf_lm = compute_sdf_from_polygon(poly_lm, image_shape, config.contour_thickness)
+
+    # Method 2 & 3: segmentation (run model once)
+    logger.info("  [2/3] Segmentation face contour...")
+    category_mask = segment_image(image)
+    poly_face = extract_segmentation_polygon(
+        category_mask, _get_segmentation_classes("segmentation_face"),
+        epsilon_factor=config.epsilon_factor,
+    )
+    sdf_face = compute_sdf_from_polygon(poly_face, image_shape, config.contour_thickness)
+
+    logger.info("  [3/3] Segmentation head contour...")
+    poly_head = extract_segmentation_polygon(
+        category_mask, _get_segmentation_classes("segmentation_head"),
+        epsilon_factor=config.epsilon_factor,
+    )
+    sdf_head = compute_sdf_from_polygon(poly_head, image_shape, config.contour_thickness)
+
+    # Average and derive outputs
+    logger.info("  Averaging signed distance fields...")
+    signed_distance = average_signed_distances([sdf_lm, sdf_face, sdf_head])
+    contour_polygon, contour_mask, filled_mask = derive_contour_from_sdf(
+        signed_distance, thickness=config.contour_thickness,
+        epsilon_factor=config.epsilon_factor,
+    )
+
+    logger.info("Preparing directional distance (mode: %s)...", config.direction)
+    directional_distance = prepare_directional_distance(
+        signed_distance, mode=config.direction, band_width=config.band_width
+    )
+    logger.info("Remapping distance to influence...")
+    influence_map = remap_influence(directional_distance, config.remap)
+    logger.info("Contour pipeline completed successfully")
+
+    return ContourResult(
+        landmarks=landmarks,
+        contour_polygon=contour_polygon,
+        contour_mask=contour_mask,
+        filled_mask=filled_mask,
+        signed_distance=signed_distance,
+        directional_distance=directional_distance,
+        influence_map=influence_map,
+    )
 
 
 def save_contour_outputs(result: ContourResult, image: np.ndarray, output_dir: Path) -> None:
@@ -864,6 +931,10 @@ def _run_contour_pipeline_with_landmarks(
         contour_polygon = extract_segmentation_polygon(
             category_mask, classes, epsilon_factor=config.epsilon_factor
         )
+    elif config.contour_method == "average":
+        if image is None:
+            raise ValueError("image is required for average contour method")
+        return _compute_average_contour(landmarks, image, config)
     else:
         raise ValueError(f"Unknown contour method: {config.contour_method}")
 
