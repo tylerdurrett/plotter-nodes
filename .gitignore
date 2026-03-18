@@ -21,6 +21,7 @@ build/
 # Output
 output/
 output_custom/
+.archived-output/
 
 # OS
 .DS_Store
