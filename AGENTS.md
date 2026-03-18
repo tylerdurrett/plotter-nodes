@@ -1,6 +1,6 @@
 ## Project
 
-- Uses uv
+- Uses uv to manage python and dependencies
 
 ## Important
 
