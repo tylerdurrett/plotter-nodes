@@ -18,6 +18,10 @@ build/
 *.swp
 *.swo
 
+# Output
+output/
+output_custom/
+
 # OS
 .DS_Store
 Thumbs.db
