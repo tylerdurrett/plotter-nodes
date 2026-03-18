@@ -14,6 +14,8 @@ The current focus is **Stage 1**: building foundational portrait analysis maps, 
 
 The larger goal is a family of creative-code drawing algorithms for pen plotting — continuous-line portraits, density-based shading, form-following strokes, and other experimental approaches. This repo supports that work by providing the upstream analysis and prototyping layer, especially where Python tools (MediaPipe, scientific Python, image processing) make exploration easier.
 
+The TypeScript plotter repo (React/Vite — sketches, SVG generation, and exporting) lives at [`../plotter`](../plotter) relative to this repo.
+
 See [docs/vision.md](docs/vision.md) for the full vision, the 7-stage development roadmap, and how this repo relates to the broader plotter system.
 
 ## What it produces

@@ -1,6 +1,7 @@
 ## Project
 
 - Uses uv to manage python and dependencies
+- The companion TypeScript plotter repo (React/Vite, handles sketches and SVG generation/exporting) is at `../plotter`
 
 ## Important
 
