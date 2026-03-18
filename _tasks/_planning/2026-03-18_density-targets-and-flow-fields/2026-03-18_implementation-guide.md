@@ -126,24 +126,33 @@ output/<image>/
 
 **Rationale:** Stage 2 is self-contained and produces a directly useful artifact (the density target map). Building luminance and composition together in one phase means the density pipeline is end-to-end testable at the end of this phase.
 
-### 2.1 Implement `luminance.py`
+### 2.1 Implement `luminance.py` ✅ COMPLETE
 
-- [ ] Create `src/portrait_map_lab/luminance.py` with `__all__`
-- [ ] Implement `extract_luminance(image: np.ndarray) -> np.ndarray` — BGR to grayscale float64 [0, 1] via `cv2.cvtColor`
-- [ ] Implement `apply_clahe(luminance: np.ndarray, clip_limit: float = 2.0, tile_size: int = 8) -> np.ndarray` — convert to uint8, apply `cv2.createCLAHE`, return float64 [0, 1]
-- [ ] Implement `compute_tonal_target(image: np.ndarray, config: LuminanceConfig | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]` — returns `(luminance, clahe_luminance, tonal_target)` where tonal_target is inverted CLAHE. Accept `None` config and create defaults (matching existing pipeline pattern).
-- [ ] Write `tests/test_luminance.py`:
+**Implementation Notes:**
+- Successfully created `src/portrait_map_lab/luminance.py` with all 3 required functions
+- Implemented BGR-to-grayscale conversion with proper float64 normalization
+- CLAHE implementation uses OpenCV with configurable clip_limit and tile_size
+- Tonal target correctly inverts CLAHE result (dark areas → high density values)
+- Created comprehensive test suite with 18 test cases, all passing
+- Fixed minor linting issues (missing newlines at end of files)
+- Note: CLAHE redistributes histogram even for uniform images, so test adjusted to check for uniformity of output rather than exact value preservation
+
+- [x] Create `src/portrait_map_lab/luminance.py` with `__all__`
+- [x] Implement `extract_luminance(image: np.ndarray) -> np.ndarray` — BGR to grayscale float64 [0, 1] via `cv2.cvtColor`
+- [x] Implement `apply_clahe(luminance: np.ndarray, clip_limit: float = 2.0, tile_size: int = 8) -> np.ndarray` — convert to uint8, apply `cv2.createCLAHE`, return float64 [0, 1]
+- [x] Implement `compute_tonal_target(image: np.ndarray, config: LuminanceConfig | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]` — returns `(luminance, clahe_luminance, tonal_target)` where tonal_target is inverted CLAHE. Accept `None` config and create defaults (matching existing pipeline pattern).
+- [x] Write `tests/test_luminance.py`:
   - Output shapes match input (H, W)
   - Output dtype is float64
   - Values in [0, 1] range
   - Tonal target is inverted: bright input → low density
-  - Uniform input → uniform output (CLAHE no-op on flat images)
+  - Uniform input → uniform output (CLAHE maintains uniformity but may remap values)
   - Black image → all 1.0 tonal target; white image → all 0.0
 
 **Acceptance Criteria:**
-- `compute_tonal_target` produces three float64 arrays in [0, 1]
-- Dark input regions produce high tonal target values
-- All tests pass
+- `compute_tonal_target` produces three float64 arrays in [0, 1] ✅
+- Dark input regions produce high tonal target values ✅
+- All tests pass ✅ (18 tests, all passing)
 
 ### 2.2 Implement `compose.py`
 
