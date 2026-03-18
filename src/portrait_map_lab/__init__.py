@@ -68,6 +68,16 @@ from portrait_map_lab.pipelines import (
     save_pipeline_outputs,
 )
 from portrait_map_lab.remap import remap_influence
+from portrait_map_lab.segmentation import (
+    SEGMENTATION_ACCESSORIES,
+    SEGMENTATION_BACKGROUND,
+    SEGMENTATION_BODY_SKIN,
+    SEGMENTATION_CLOTHES,
+    SEGMENTATION_FACE_SKIN,
+    SEGMENTATION_HAIR,
+    extract_segmentation_polygon,
+    segment_image,
+)
 from portrait_map_lab.storage import (
     ensure_output_dir,
     load_image,
@@ -166,6 +176,15 @@ __all__ = [
     "make_contact_sheet",
     "visualize_flow_field",
     "overlay_lic",
+    # Segmentation functions
+    "segment_image",
+    "extract_segmentation_polygon",
+    "SEGMENTATION_BACKGROUND",
+    "SEGMENTATION_HAIR",
+    "SEGMENTATION_BODY_SKIN",
+    "SEGMENTATION_FACE_SKIN",
+    "SEGMENTATION_CLOTHES",
+    "SEGMENTATION_ACCESSORIES",
     # Constants
     "DEFAULT_REGIONS",
 ]

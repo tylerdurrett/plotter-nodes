@@ -130,10 +130,12 @@ class TestPipelineResult:
 class TestContourConfig:
     def test_defaults(self):
         config = ContourConfig()
+        assert config.contour_method == "landmarks"
         assert isinstance(config.remap, RemapConfig)
         assert config.direction == "inward"
         assert config.band_width is None
         assert config.contour_thickness == 1
+        assert config.epsilon_factor == 0.005
         assert config.output_dir == "output"
 
     def test_mutable(self):
@@ -171,6 +173,20 @@ class TestContourResult:
         assert result.signed_distance.shape == (100, 100)
         assert result.directional_distance.shape == (100, 100)
         assert result.influence_map.shape == (100, 100)
+
+    def test_creation_with_none_landmarks(self):
+        """ContourResult should accept landmarks=None for segmentation paths."""
+        result = ContourResult(
+            landmarks=None,
+            contour_polygon=np.zeros((20, 2), dtype=np.float64),
+            contour_mask=np.zeros((100, 100), dtype=np.uint8),
+            filled_mask=np.zeros((100, 100), dtype=np.uint8),
+            signed_distance=np.zeros((100, 100), dtype=np.float64),
+            directional_distance=np.zeros((100, 100), dtype=np.float64),
+            influence_map=np.zeros((100, 100), dtype=np.float64),
+        )
+        assert result.landmarks is None
+        assert result.contour_polygon.shape == (20, 2)
 
     def test_frozen(self):
         landmarks = LandmarkResult(

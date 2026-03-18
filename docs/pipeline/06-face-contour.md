@@ -132,24 +132,68 @@ Where:
 - **Gradient Unity**: |∇D| = 1 almost everywhere
 - **Sign Preservation**: Interior/exterior distinction maintained
 
-## Contour Extraction
+## Contour Extraction Methods
 
-### Convex Hull Method
+The pipeline supports three contour extraction methods, controlled by `--contour-method`:
 
-The landmark-based contour extraction uses the convex hull of all 478 landmarks:
+### `landmarks` (default)
+
+Uses the convex hull of all 478 MediaPipe face landmarks:
 
 ```python
-# Compute convex hull of all 478 landmarks
-points_2d = landmarks.landmarks[:, :2]
-hull = ConvexHull(points_2d)
-polygon = points_2d[hull.vertices]
+config = ContourConfig(contour_method="landmarks")
 ```
 
-**Advantages:**
-- Captures full visible face boundary
-- Includes lateral cheek regions
-- No parameter tuning needed
-- Robust to 3D projection
+**Advantages:** Captures full visible face boundary, no parameter tuning, robust to 3D projection.
+**Limitation:** Always convex — cannot represent jawline concavities.
+
+### `segmentation_face`
+
+Uses MediaPipe's multiclass selfie segmenter to extract the face skin boundary:
+
+```python
+config = ContourConfig(contour_method="segmentation_face")
+```
+
+**Advantages:** Pixel-accurate face skin boundary, follows actual skin edges, non-convex.
+**Limitation:** Model outputs at 256×256 resolution, upscaled — edges can be slightly blobby.
+
+### `segmentation_head`
+
+Combines hair + face skin + accessories classes for a full head contour:
+
+```python
+config = ContourConfig(contour_method="segmentation_head")
+```
+
+**Advantages:** Includes hair and accessories, captures full head silhouette.
+**Limitation:** Same resolution limitation as `segmentation_face`.
+
+### Method Comparison
+
+| Aspect | `landmarks` | `segmentation_face` | `segmentation_head` |
+|--------|-------------|--------------------|--------------------|
+| Shape | Always convex | Non-convex, skin boundary | Non-convex, full head |
+| Coverage | Face only | Face skin only | Hair + face + accessories |
+| Resolution | Subpixel (float64 landmarks) | 256×256 upscaled | 256×256 upscaled |
+| Speed | Fast (hull only) | Slower (model inference) | Slower (model inference) |
+| Needs landmarks | Yes | No | No |
+
+### CLI Examples
+
+```bash
+# Default landmark-based contour
+uv run python scripts/run_pipeline.py contour image.jpg
+
+# Face skin contour from segmentation
+uv run python scripts/run_pipeline.py contour image.jpg --contour-method segmentation_face
+
+# Full head contour (hair + face + accessories)
+uv run python scripts/run_pipeline.py contour image.jpg --contour-method segmentation_head
+
+# Adjust contour simplification
+uv run python scripts/run_pipeline.py contour image.jpg --contour-method segmentation_face --epsilon-factor 0.01
+```
 
 ## Direction Modes
 
@@ -231,10 +275,12 @@ output/<image_name>/contour/
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `contour_method` | str | "landmarks" | Contour extraction method (landmarks/segmentation_face/segmentation_head) |
 | `remap` | RemapConfig | RemapConfig() | Influence remapping settings |
 | `direction` | str | "inward" | Direction mode (inward/outward/both/band) |
 | `band_width` | float \| None | None | Band width for band mode (pixels) |
 | `contour_thickness` | int | 1 | Contour line thickness (pixels) |
+| `epsilon_factor` | float | 0.005 | Contour simplification for segmentation methods (0 to disable) |
 | `output_dir` | str | "output" | Base output directory |
 
 ### RemapConfig Integration

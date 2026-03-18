@@ -169,3 +169,45 @@ class TestContourPipeline:
             assert result.influence_map.min() >= 0.0
             assert result.influence_map.max() <= 1.0
             assert not np.isnan(result.influence_map).any()
+
+    def test_segmentation_face_method(self, test_image):
+        """Test pipeline with segmentation_face contour method."""
+        config = ContourConfig(contour_method="segmentation_face")
+        result = run_contour_pipeline(test_image, config)
+
+        assert result.landmarks is None
+        assert result.contour_polygon.ndim == 2
+        assert result.contour_polygon.shape[1] == 2
+        assert result.signed_distance.min() < 0
+        assert result.signed_distance.max() > 0
+        assert result.influence_map.min() >= 0.0
+        assert result.influence_map.max() <= 1.0
+
+    def test_segmentation_head_method(self, test_image):
+        """Test pipeline with segmentation_head contour method."""
+        config = ContourConfig(contour_method="segmentation_head")
+        result = run_contour_pipeline(test_image, config)
+
+        assert result.landmarks is None
+        assert result.contour_polygon.ndim == 2
+        assert result.contour_polygon.shape[1] == 2
+        assert result.influence_map.min() >= 0.0
+        assert result.influence_map.max() <= 1.0
+
+    def test_segmentation_head_larger_than_face(self, test_image):
+        """Head segmentation should cover more area than face segmentation."""
+        face_result = run_contour_pipeline(
+            test_image, ContourConfig(contour_method="segmentation_face")
+        )
+        head_result = run_contour_pipeline(
+            test_image, ContourConfig(contour_method="segmentation_head")
+        )
+        face_fill = np.sum(face_result.filled_mask > 0)
+        head_fill = np.sum(head_result.filled_mask > 0)
+        assert head_fill >= face_fill
+
+    def test_unknown_contour_method_raises(self, test_image):
+        """Unknown contour method should raise ValueError."""
+        config = ContourConfig(contour_method="invalid")
+        with pytest.raises(ValueError, match="Unknown contour method"):
+            run_contour_pipeline(test_image, config)

@@ -56,6 +56,7 @@ The Portrait Map Lab pipeline implements a modular, extensible architecture for 
 | `landmarks.py` | Face detection | MediaPipe | LandmarkResult |
 | `face_regions.py` | Region definitions | None | Polygon coordinates |
 | `face_contour.py` | Face boundary extraction | SciPy, OpenCV | Contour masks, signed distance |
+| `segmentation.py` | Semantic segmentation | MediaPipe, OpenCV | Category masks, contour polygons |
 | `masks.py` | Mask rasterization | OpenCV | Binary masks |
 | `distance_fields.py` | Distance transforms | SciPy | Distance arrays |
 | `remap.py` | Influence mapping | NumPy | Influence arrays |
@@ -102,7 +103,7 @@ class PipelineResult:
 
 @dataclass(frozen=True)
 class ContourResult:
-    landmarks: LandmarkResult
+    landmarks: LandmarkResult | None  # None when using segmentation
     contour_polygon: np.ndarray
     contour_mask: np.ndarray
     filled_mask: np.ndarray
@@ -130,10 +131,12 @@ class PipelineConfig:
 
 @dataclass
 class ContourConfig:
+    contour_method: str = "landmarks"  # landmarks, segmentation_face, segmentation_head
     remap: RemapConfig
     direction: str = "inward"
     band_width: float | None = None
     contour_thickness: int = 1
+    epsilon_factor: float = 0.005
     output_dir: str = "output"
 ```
 
