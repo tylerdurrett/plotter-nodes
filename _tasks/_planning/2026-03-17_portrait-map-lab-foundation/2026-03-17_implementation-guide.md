@@ -247,20 +247,22 @@ plotter-nodes/
 
 ### 4.2 Influence Remapping
 
-- [ ] Create `remap.py` with `from __future__ import annotations`
-- [ ] Implement `remap_influence(distance_field: np.ndarray, config: RemapConfig) -> np.ndarray`:
+- [x] Create `remap.py` with `from __future__ import annotations`
+- [x] Implement `remap_influence(distance_field: np.ndarray, config: RemapConfig) -> np.ndarray`:
   - Clamp distance at `config.clamp_distance`
   - Apply curve based on `config.curve`:
     - `"linear"`: `max(0, 1 - d / radius)`
     - `"gaussian"`: `exp(-(d² / (2σ²)))`
     - `"exponential"`: `exp(-d / τ)`
   - Return `float64` array in range [0.0, 1.0]
-- [ ] Write `tests/test_remap.py`:
+- [x] Write `tests/test_remap.py`:
   - Test: output values are in [0.0, 1.0]
   - Test: influence is 1.0 at distance 0.0 for all curve types
   - Test: influence decreases as distance increases
   - Test: linear curve reaches 0.0 at d >= radius
   - Test: invalid curve name raises `ValueError`
+
+> **Note:** Implementation complete with 10 comprehensive tests covering all curve types, parameter effects, clamping behavior, and edge cases. Formatting was slightly adjusted to meet ruff standards (trailing newlines, line length). All acceptance criteria verified passing.
 
 **Acceptance Criteria:**
 - All three curve types produce values in [0.0, 1.0]
