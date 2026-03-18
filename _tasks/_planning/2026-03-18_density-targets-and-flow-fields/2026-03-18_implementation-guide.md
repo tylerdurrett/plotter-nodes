@@ -76,34 +76,42 @@ output/<image>/
 
 ---
 
-## Phase 1: Data Models
+## Phase 1: Data Models ✅ COMPLETE
 
 **Purpose:** Define all new configuration and result dataclasses so downstream phases can import them immediately.
 
 **Rationale:** Every new module depends on these types. Defining them first avoids circular dependencies and lets each phase focus on logic rather than data structure design.
 
-### 1.1 Add configuration dataclasses to `models.py`
+**Implementation Notes:**
+- Successfully added all 5 configuration dataclasses (LuminanceConfig, ComposeConfig, ETFConfig, FlowConfig, LICConfig)
+- Successfully added all 4 result dataclasses (DensityResult, ETFResult, FlowResult, ComposedResult)
+- All dataclasses follow existing patterns: mutable configs with slots=True, frozen results with slots=True
+- Used field(default_factory=...) for nested mutable configs to ensure independent instances
+- Added comprehensive tests for all new dataclasses (19 new test methods)
+- All 37 tests pass, no lint errors
 
-- [ ] Add `LuminanceConfig` dataclass (mutable, `slots=True`): `clip_limit: float = 2.0`, `tile_size: int = 8`
-- [ ] Add `ComposeConfig` dataclass (mutable, `slots=True`): `luminance: LuminanceConfig`, `feature_weight: float = 0.6`, `contour_weight: float = 0.4`, `tonal_blend_mode: str = "multiply"`, `tonal_weight: float = 1.0`, `importance_weight: float = 1.0`, `gamma: float = 1.0`
-- [ ] Add `ETFConfig` dataclass (mutable, `slots=True`): `blur_sigma: float = 1.5`, `structure_sigma: float = 5.0`, `refine_sigma: float = 3.0`, `refine_iterations: int = 2`, `sobel_ksize: int = 3`
-- [ ] Add `FlowConfig` dataclass (mutable, `slots=True`): `etf: ETFConfig`, `contour_smooth_sigma: float = 1.0`, `blend_mode: str = "coherence"`, `coherence_power: float = 2.0`, `fallback_threshold: float = 0.1`
-- [ ] Add `LICConfig` dataclass (mutable, `slots=True`): `length: int = 30`, `step: float = 1.0`, `seed: int = 42`, `use_bilinear: bool = True`
-- [ ] Update `__all__` in models.py
+### 1.1 Add configuration dataclasses to `models.py` ✅
+
+- [x] Add `LuminanceConfig` dataclass (mutable, `slots=True`): `clip_limit: float = 2.0`, `tile_size: int = 8`
+- [x] Add `ComposeConfig` dataclass (mutable, `slots=True`): `luminance: LuminanceConfig`, `feature_weight: float = 0.6`, `contour_weight: float = 0.4`, `tonal_blend_mode: str = "multiply"`, `tonal_weight: float = 1.0`, `importance_weight: float = 1.0`, `gamma: float = 1.0`
+- [x] Add `ETFConfig` dataclass (mutable, `slots=True`): `blur_sigma: float = 1.5`, `structure_sigma: float = 5.0`, `refine_sigma: float = 3.0`, `refine_iterations: int = 2`, `sobel_ksize: int = 3`
+- [x] Add `FlowConfig` dataclass (mutable, `slots=True`): `etf: ETFConfig`, `contour_smooth_sigma: float = 1.0`, `blend_mode: str = "coherence"`, `coherence_power: float = 2.0`, `fallback_threshold: float = 0.1`
+- [x] Add `LICConfig` dataclass (mutable, `slots=True`): `length: int = 30`, `step: float = 1.0`, `seed: int = 42`, `use_bilinear: bool = True`
+- [x] Update `__all__` in models.py
 
 **Acceptance Criteria:**
 - All config dataclasses instantiate with defaults
 - Configs are mutable (not frozen)
 - `field(default_factory=...)` used for mutable defaults (LuminanceConfig inside ComposeConfig, ETFConfig inside FlowConfig)
 
-### 1.2 Add result dataclasses to `models.py`
+### 1.2 Add result dataclasses to `models.py` ✅
 
-- [ ] Add `DensityResult` dataclass (frozen, `slots=True`): `luminance`, `clahe_luminance`, `tonal_target`, `importance`, `density_target` — all `np.ndarray`
-- [ ] Add `ETFResult` dataclass (frozen, `slots=True`): `tangent_x`, `tangent_y`, `coherence`, `gradient_magnitude` — all `np.ndarray`
-- [ ] Add `FlowResult` dataclass (frozen, `slots=True`): `etf: ETFResult`, `contour_flow_x`, `contour_flow_y`, `blend_weight`, `flow_x`, `flow_y` — all arrays except etf
-- [ ] Add `ComposedResult` dataclass (frozen, `slots=True`): `feature_result: PipelineResult`, `contour_result: ContourResult`, `density_result: DensityResult`, `flow_result: FlowResult`, `lic_image: np.ndarray`
-- [ ] Update `__all__` in models.py
-- [ ] Write tests in `tests/test_models.py` (extend existing file): creation with defaults, frozen behavior, independent default instances for mutable configs
+- [x] Add `DensityResult` dataclass (frozen, `slots=True`): `luminance`, `clahe_luminance`, `tonal_target`, `importance`, `density_target` — all `np.ndarray`
+- [x] Add `ETFResult` dataclass (frozen, `slots=True`): `tangent_x`, `tangent_y`, `coherence`, `gradient_magnitude` — all `np.ndarray`
+- [x] Add `FlowResult` dataclass (frozen, `slots=True`): `etf: ETFResult`, `contour_flow_x`, `contour_flow_y`, `blend_weight`, `flow_x`, `flow_y` — all arrays except etf
+- [x] Add `ComposedResult` dataclass (frozen, `slots=True`): `feature_result: PipelineResult`, `contour_result: ContourResult`, `density_result: DensityResult`, `flow_result: FlowResult`, `lic_image: np.ndarray`
+- [x] Update `__all__` in models.py
+- [x] Write tests in `tests/test_models.py` (extend existing file): creation with defaults, frozen behavior, independent default instances for mutable configs
 
 **Acceptance Criteria:**
 - Result dataclasses are frozen (raises `FrozenInstanceError` on attribute assignment)

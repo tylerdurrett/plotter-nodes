@@ -7,9 +7,18 @@ from dataclasses import dataclass, field
 import numpy as np
 
 __all__ = [
+    "ComposeConfig",
+    "ComposedResult",
     "ContourConfig",
     "ContourResult",
+    "DensityResult",
+    "ETFConfig",
+    "ETFResult",
+    "FlowConfig",
+    "FlowResult",
     "LandmarkResult",
+    "LICConfig",
+    "LuminanceConfig",
     "PipelineConfig",
     "PipelineResult",
     "RegionDefinition",
@@ -161,3 +170,100 @@ class ContourResult:
     signed_distance: np.ndarray
     directional_distance: np.ndarray
     influence_map: np.ndarray
+
+
+@dataclass(slots=True)
+class LuminanceConfig:
+    """Configuration for luminance extraction and CLAHE processing."""
+
+    clip_limit: float = 2.0
+    tile_size: int = 8
+
+
+@dataclass(slots=True)
+class ComposeConfig:
+    """Configuration for density map composition."""
+
+    luminance: LuminanceConfig = field(default_factory=LuminanceConfig)
+    feature_weight: float = 0.6
+    contour_weight: float = 0.4
+    tonal_blend_mode: str = "multiply"
+    tonal_weight: float = 1.0
+    importance_weight: float = 1.0
+    gamma: float = 1.0
+
+
+@dataclass(slots=True)
+class ETFConfig:
+    """Configuration for Edge Tangent Field computation."""
+
+    blur_sigma: float = 1.5
+    structure_sigma: float = 5.0
+    refine_sigma: float = 3.0
+    refine_iterations: int = 2
+    sobel_ksize: int = 3
+
+
+@dataclass(slots=True)
+class FlowConfig:
+    """Configuration for flow field computation."""
+
+    etf: ETFConfig = field(default_factory=ETFConfig)
+    contour_smooth_sigma: float = 1.0
+    blend_mode: str = "coherence"
+    coherence_power: float = 2.0
+    fallback_threshold: float = 0.1
+
+
+@dataclass(slots=True)
+class LICConfig:
+    """Configuration for Line Integral Convolution visualization."""
+
+    length: int = 30
+    step: float = 1.0
+    seed: int = 42
+    use_bilinear: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class DensityResult:
+    """Result of density target computation pipeline."""
+
+    luminance: np.ndarray
+    clahe_luminance: np.ndarray
+    tonal_target: np.ndarray
+    importance: np.ndarray
+    density_target: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class ETFResult:
+    """Result of Edge Tangent Field computation."""
+
+    tangent_x: np.ndarray
+    tangent_y: np.ndarray
+    coherence: np.ndarray
+    gradient_magnitude: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class FlowResult:
+    """Result of flow field computation pipeline."""
+
+    etf: ETFResult
+    contour_flow_x: np.ndarray
+    contour_flow_y: np.ndarray
+    blend_weight: np.ndarray
+    flow_x: np.ndarray
+    flow_y: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class ComposedResult:
+    """Complete result of all pipelines combined."""
+
+    feature_result: PipelineResult
+    contour_result: ContourResult
+    density_result: DensityResult
+    flow_result: FlowResult
+    lic_image: np.ndarray
