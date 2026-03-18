@@ -321,17 +321,19 @@ plotter-nodes/
 
 ### 5.2 Visualization
 
-- [ ] Create `viz.py` with `from __future__ import annotations`
-- [ ] Implement `draw_landmarks(image: np.ndarray, landmarks: LandmarkResult) -> np.ndarray`:
+- [x] Create `viz.py` with `from __future__ import annotations`
+- [x] Implement `draw_landmarks(image: np.ndarray, landmarks: LandmarkResult) -> np.ndarray`:
   - Draw landmark points on a copy of the image
   - Return annotated image (does not mutate input)
-- [ ] Implement `colorize_map(array: np.ndarray, colormap: str = "inferno") -> np.ndarray`:
+- [x] Implement `colorize_map(array: np.ndarray, colormap: str = "inferno") -> np.ndarray`:
   - Apply matplotlib colormap to a [0, 1] float array
   - Return BGR uint8 image for saving with OpenCV
-- [ ] Implement `make_contact_sheet(images: dict[str, np.ndarray], columns: int = 4) -> np.ndarray`:
+- [x] Implement `make_contact_sheet(images: dict[str, np.ndarray], columns: int = 4) -> np.ndarray`:
   - Arrange labeled images in a grid
   - Resize to uniform cell size
   - Return single composite image
+
+> **Note:** All three visualization functions implemented following established patterns. Uses cv2 for image operations (consistency with storage.py and masks.py), matplotlib only for colormap generation. Landmarks drawn as small 2-pixel green circles with bounds checking. Contact sheet uses white background with black text labels, 256x256 cell size, and 30px label area above each image. All functions return new arrays without mutation. Manual testing verified with both synthetic and real portrait data. All acceptance criteria met.
 
 **Acceptance Criteria:**
 - `draw_landmarks` returns a new array (no mutation)
