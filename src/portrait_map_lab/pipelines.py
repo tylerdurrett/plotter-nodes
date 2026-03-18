@@ -1224,13 +1224,11 @@ def run_all_pipelines(
     density_result = run_density_pipeline(image, feature_result, contour_result, compose_config)
     logger.info("Density pipeline completed")
 
-    # Step 5: Optionally run complexity pipeline using contour mask
+    # Step 5: Optionally run complexity pipeline (unmasked — full image)
     complexity_result = None
     if complexity_config is not None:
         logger.info("\n--- Stage 4: Complexity Map Pipeline ---")
-        # Use filled mask from contour result to restrict complexity to face region
-        mask = contour_result.filled_mask if contour_result.filled_mask is not None else None
-        complexity_result = run_complexity_pipeline(image, complexity_config, mask)
+        complexity_result = run_complexity_pipeline(image, complexity_config)
         logger.info("Complexity pipeline completed")
 
     # Step 6: Run flow pipeline using contour result and optional complexity

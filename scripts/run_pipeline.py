@@ -999,9 +999,7 @@ def handle_flow(
     if args.metric is not None:
         logger.info("Running complexity pipeline for flow speed modulation...")
         complexity_config = build_complexity_config(args)
-        # Use contour filled mask to restrict complexity to face region
-        mask = contour_result.filled_mask if contour_result.filled_mask is not None else None
-        complexity_result = run_complexity_pipeline(image, complexity_config, mask)
+        complexity_result = run_complexity_pipeline(image, complexity_config)
         speed_config = build_flow_speed_config(args)
         # Save complexity outputs in parent dir
         save_complexity_outputs(complexity_result, output_dir.parent, image)
