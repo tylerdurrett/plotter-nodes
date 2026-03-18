@@ -132,8 +132,8 @@ plotter-nodes/
 
 ### 2.1 Test Image Setup
 
-- [ ] Add some portrait test images to `test_images/`
-- [ ] Add `test_images/` to version control (small enough to commit)
+- [x] Add some portrait test images to `test_images/`
+- [x] Add `test_images/` to version control (small enough to commit)
 - [ ] Add a `conftest.py` fixture that loads the test image path and array
 
 **Acceptance Criteria:**
