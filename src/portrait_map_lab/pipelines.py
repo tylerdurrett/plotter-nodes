@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from portrait_map_lab.combine import combine_maps
+from portrait_map_lab.compose import build_density_target
 from portrait_map_lab.distance_fields import compute_distance_field
 from portrait_map_lab.face_contour import (
     compute_signed_distance,
@@ -18,8 +19,16 @@ from portrait_map_lab.face_contour import (
     rasterize_filled_mask,
 )
 from portrait_map_lab.landmarks import detect_landmarks
+from portrait_map_lab.luminance import compute_tonal_target
 from portrait_map_lab.masks import build_region_masks
-from portrait_map_lab.models import ContourConfig, ContourResult, PipelineConfig, PipelineResult
+from portrait_map_lab.models import (
+    ComposeConfig,
+    ContourConfig,
+    ContourResult,
+    DensityResult,
+    PipelineConfig,
+    PipelineResult,
+)
 from portrait_map_lab.remap import remap_influence
 from portrait_map_lab.storage import save_array, save_image
 from portrait_map_lab.viz import colorize_map, draw_contour, draw_landmarks, make_contact_sheet
@@ -357,3 +366,161 @@ def save_contour_outputs(result: ContourResult, image: np.ndarray, output_dir: P
     save_image(contact_sheet, output_dir / "contact_sheet.png")
 
     logger.info("All contour outputs saved successfully")
+
+
+def run_density_pipeline(
+    image: np.ndarray,
+    feature_result: PipelineResult,
+    contour_result: ContourResult,
+    config: ComposeConfig | None = None,
+) -> DensityResult:
+    """Run the density target composition pipeline.
+
+    Combines tonal targets from luminance with importance maps from features
+    and contours to create a composed density target for particle placement.
+
+    Parameters
+    ----------
+    image
+        BGR uint8 image array (as loaded by cv2.imread).
+    feature_result
+        Pre-computed feature pipeline result containing feature importance maps.
+    contour_result
+        Pre-computed contour pipeline result containing contour importance map.
+    config
+        Configuration for density composition. If None, uses default configuration.
+
+    Returns
+    -------
+    DensityResult
+        Complete density pipeline result with luminance, CLAHE, tonal target,
+        combined importance map, and final density target.
+
+    Raises
+    ------
+    ValueError
+        If input arrays have mismatched shapes.
+    """
+    if config is None:
+        config = ComposeConfig()
+
+    logger.info("Starting density pipeline...")
+
+    # Step 1: Compute tonal targets from luminance
+    logger.info("Computing tonal targets from luminance...")
+    luminance, clahe_luminance, tonal_target = compute_tonal_target(image, config.luminance)
+
+    # Step 2: Combine feature and contour importance maps
+    logger.info("Combining importance maps (features: %.2f, contour: %.2f)...",
+                config.feature_weight, config.contour_weight)
+
+    # Create maps and weights dictionaries for combine_maps
+    importance_maps = {
+        "features": feature_result.combined,
+        "contour": contour_result.influence_map,
+    }
+    importance_weights = {
+        "features": config.feature_weight,
+        "contour": config.contour_weight,
+    }
+
+    # Combine the importance maps with specified weights
+    importance = combine_maps(importance_maps, importance_weights)
+
+    # Step 3: Build final density target
+    logger.info("Building density target (mode: %s, gamma: %.2f)...",
+                config.tonal_blend_mode, config.gamma)
+    density_target = build_density_target(
+        tonal_target=tonal_target,
+        importance=importance,
+        mode=config.tonal_blend_mode,
+        gamma=config.gamma,
+    )
+
+    logger.info("Density pipeline completed successfully")
+
+    return DensityResult(
+        luminance=luminance,
+        clahe_luminance=clahe_luminance,
+        tonal_target=tonal_target,
+        importance=importance,
+        density_target=density_target,
+    )
+
+
+def save_density_outputs(
+    result: DensityResult,
+    output_dir: Path,
+    image: np.ndarray | None = None,
+) -> None:
+    """Save all density pipeline outputs to the specified directory.
+
+    Creates the following output structure:
+    ```
+    output_dir/density/
+        luminance.png
+        clahe_luminance.png
+        tonal_target.png
+        importance.png
+        density_target.png
+        density_target_raw.npy
+        contact_sheet.png
+    ```
+
+    Parameters
+    ----------
+    result
+        Complete density pipeline result to save.
+    output_dir
+        Directory to save outputs to (will be created if needed).
+    image
+        Original input image for the contact sheet. Optional.
+    """
+    # Create density subdirectory
+    density_dir = Path(output_dir) / "density"
+    density_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Saving density pipeline outputs to %s", density_dir)
+
+    # Save grayscale luminance images
+    luminance_uint8 = (result.luminance * 255).astype(np.uint8)
+    save_image(luminance_uint8, density_dir / "luminance.png")
+
+    clahe_luminance_uint8 = (result.clahe_luminance * 255).astype(np.uint8)
+    save_image(clahe_luminance_uint8, density_dir / "clahe_luminance.png")
+
+    # Save colorized tonal target (hot colormap)
+    tonal_target_img = colorize_map(result.tonal_target, colormap="hot")
+    save_image(tonal_target_img, density_dir / "tonal_target.png")
+
+    # Save colorized importance map (inferno colormap)
+    importance_img = colorize_map(result.importance, colormap="inferno")
+    save_image(importance_img, density_dir / "importance.png")
+
+    # Save colorized density target (hot colormap)
+    density_target_img = colorize_map(result.density_target, colormap="hot")
+    save_image(density_target_img, density_dir / "density_target.png")
+
+    # Save raw density target array
+    save_array(result.density_target, density_dir / "density_target_raw.npy")
+
+    # Create and save contact sheet
+    contact_images = {}
+
+    # Add original image if provided
+    if image is not None:
+        contact_images["Original"] = image
+
+    # Add luminance images (convert to BGR for display)
+    contact_images["Luminance"] = cv2.cvtColor(luminance_uint8, cv2.COLOR_GRAY2BGR)
+    contact_images["CLAHE Luminance"] = cv2.cvtColor(clahe_luminance_uint8, cv2.COLOR_GRAY2BGR)
+
+    # Add colorized maps
+    contact_images["Tonal Target"] = tonal_target_img
+    contact_images["Importance Map"] = importance_img
+    contact_images["Density Target"] = density_target_img
+
+    contact_sheet = make_contact_sheet(contact_images, columns=3)
+    save_image(contact_sheet, density_dir / "contact_sheet.png")
+
+    logger.info("All density outputs saved successfully")

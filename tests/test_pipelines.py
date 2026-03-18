@@ -8,8 +8,21 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from portrait_map_lab.models import PipelineConfig, PipelineResult, RemapConfig
-from portrait_map_lab.pipelines import run_feature_distance_pipeline, save_pipeline_outputs
+from portrait_map_lab.models import (
+    ComposeConfig,
+    DensityResult,
+    LuminanceConfig,
+    PipelineConfig,
+    PipelineResult,
+    RemapConfig,
+)
+from portrait_map_lab.pipelines import (
+    run_contour_pipeline,
+    run_density_pipeline,
+    run_feature_distance_pipeline,
+    save_density_outputs,
+    save_pipeline_outputs,
+)
 
 
 def test_pipeline_returns_complete_result(test_image):
@@ -196,3 +209,190 @@ def test_pipeline_with_blank_image():
 
     with pytest.raises(ValueError, match="No face detected"):
         run_feature_distance_pipeline(blank_image)
+
+
+# Density Pipeline Tests
+
+
+def test_density_pipeline_complete_result(test_image):
+    """Test that density pipeline returns a DensityResult with all fields populated."""
+    # First run feature and contour pipelines to get inputs
+    feature_result = run_feature_distance_pipeline(test_image)
+    contour_result = run_contour_pipeline(test_image)
+
+    # Run density pipeline
+    result = run_density_pipeline(test_image, feature_result, contour_result)
+
+    # Check result type and fields
+    assert isinstance(result, DensityResult)
+    assert result.luminance is not None
+    assert result.clahe_luminance is not None
+    assert result.tonal_target is not None
+    assert result.importance is not None
+    assert result.density_target is not None
+
+
+def test_density_pipeline_shapes(test_image):
+    """Test that all density pipeline arrays have correct shapes."""
+    h, w = test_image.shape[:2]
+
+    # Run prerequisite pipelines
+    feature_result = run_feature_distance_pipeline(test_image)
+    contour_result = run_contour_pipeline(test_image)
+
+    # Run density pipeline
+    result = run_density_pipeline(test_image, feature_result, contour_result)
+
+    # Check all array shapes match image dimensions
+    assert result.luminance.shape == (h, w)
+    assert result.clahe_luminance.shape == (h, w)
+    assert result.tonal_target.shape == (h, w)
+    assert result.importance.shape == (h, w)
+    assert result.density_target.shape == (h, w)
+
+    # Check all arrays are float64
+    assert result.luminance.dtype == np.float64
+    assert result.clahe_luminance.dtype == np.float64
+    assert result.tonal_target.dtype == np.float64
+    assert result.importance.dtype == np.float64
+    assert result.density_target.dtype == np.float64
+
+
+def test_density_pipeline_value_ranges(test_image):
+    """Test that all density pipeline outputs are in [0, 1] range."""
+    # Run prerequisite pipelines
+    feature_result = run_feature_distance_pipeline(test_image)
+    contour_result = run_contour_pipeline(test_image)
+
+    # Run density pipeline
+    result = run_density_pipeline(test_image, feature_result, contour_result)
+
+    # Check all values are in [0, 1]
+    assert result.luminance.min() >= 0.0 and result.luminance.max() <= 1.0
+    assert result.clahe_luminance.min() >= 0.0 and result.clahe_luminance.max() <= 1.0
+    assert result.tonal_target.min() >= 0.0 and result.tonal_target.max() <= 1.0
+    assert result.importance.min() >= 0.0 and result.importance.max() <= 1.0
+    assert result.density_target.min() >= 0.0 and result.density_target.max() <= 1.0
+
+    # Check no NaN or inf values
+    assert np.isfinite(result.luminance).all()
+    assert np.isfinite(result.clahe_luminance).all()
+    assert np.isfinite(result.tonal_target).all()
+    assert np.isfinite(result.importance).all()
+    assert np.isfinite(result.density_target).all()
+
+
+def test_save_density_outputs_creates_files(test_image):
+    """Test that save_density_outputs creates all expected files."""
+    # Run prerequisite pipelines
+    feature_result = run_feature_distance_pipeline(test_image)
+    contour_result = run_contour_pipeline(test_image)
+
+    # Run density pipeline
+    result = run_density_pipeline(test_image, feature_result, contour_result)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir) / "test_output"
+        save_density_outputs(result, output_dir, image=test_image)
+
+        # Check that density subdirectory was created
+        density_dir = output_dir / "density"
+        assert density_dir.exists()
+
+        # Check for expected files
+        expected_files = [
+            "luminance.png",
+            "clahe_luminance.png",
+            "tonal_target.png",
+            "importance.png",
+            "density_target.png",
+            "density_target_raw.npy",
+            "contact_sheet.png",
+        ]
+
+        for filename in expected_files:
+            filepath = density_dir / filename
+            assert filepath.exists(), f"Expected file {filename} not found"
+
+        # Verify .npy file can be loaded and has correct shape
+        density_array = np.load(density_dir / "density_target_raw.npy")
+        assert density_array.shape == test_image.shape[:2]
+        assert density_array.dtype == np.float64
+
+
+def test_density_pipeline_with_custom_config(test_image):
+    """Test density pipeline with custom configuration."""
+    # Run prerequisite pipelines
+    feature_result = run_feature_distance_pipeline(test_image)
+    contour_result = run_contour_pipeline(test_image)
+
+    # Create custom config
+    config = ComposeConfig(
+        luminance=LuminanceConfig(clip_limit=3.0, tile_size=16),
+        feature_weight=0.8,
+        contour_weight=0.2,
+        tonal_blend_mode="screen",
+        gamma=0.8,
+    )
+
+    # Run density pipeline with custom config
+    result = run_density_pipeline(test_image, feature_result, contour_result, config)
+
+    # Should complete successfully
+    assert result is not None
+    assert isinstance(result, DensityResult)
+
+    # Result should still be valid
+    assert result.density_target.min() >= 0.0
+    assert result.density_target.max() <= 1.0
+
+
+def test_density_pipeline_blend_modes(test_image):
+    """Test that different blend modes produce different results."""
+    # Run prerequisite pipelines
+    feature_result = run_feature_distance_pipeline(test_image)
+    contour_result = run_contour_pipeline(test_image)
+
+    # Test different blend modes
+    modes = ["multiply", "screen", "max", "weighted"]
+    results = {}
+
+    for mode in modes:
+        config = ComposeConfig(tonal_blend_mode=mode)
+        result = run_density_pipeline(test_image, feature_result, contour_result, config)
+        results[mode] = result.density_target
+
+    # Results should be different for different modes
+    # (but not necessarily all different from each other)
+    unique_results = []
+    for mode, array in results.items():
+        is_unique = True
+        for existing in unique_results:
+            if np.allclose(array, existing):
+                is_unique = False
+                break
+        if is_unique:
+            unique_results.append(array)
+
+    # At least 2 different results expected
+    assert len(unique_results) >= 2, "Blend modes should produce different results"
+
+
+def test_save_density_outputs_without_image(test_image):
+    """Test save_density_outputs works without providing original image."""
+    # Run prerequisite pipelines
+    feature_result = run_feature_distance_pipeline(test_image)
+    contour_result = run_contour_pipeline(test_image)
+
+    # Run density pipeline
+    result = run_density_pipeline(test_image, feature_result, contour_result)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir) / "test_output"
+        # Save without providing image
+        save_density_outputs(result, output_dir, image=None)
+
+        # Should still create outputs
+        density_dir = output_dir / "density"
+        assert density_dir.exists()
+        assert (density_dir / "contact_sheet.png").exists()
