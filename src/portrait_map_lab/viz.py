@@ -174,3 +174,99 @@ def draw_contour(
     cv2.polylines(annotated, [pts], isClosed=True, color=color, thickness=thickness)
 
     return annotated
+
+
+def visualize_flow_field(
+    flow_x: np.ndarray,
+    flow_y: np.ndarray,
+    image: np.ndarray | None = None,
+    step: int = 16,
+    scale: float = 10.0,
+    color: tuple[int, int, int] = (0, 255, 0),
+) -> np.ndarray:
+    """Draw flow field vectors as arrows on a grid.
+
+    Parameters
+    ----------
+    flow_x
+        X-component of the flow field (unit vectors).
+    flow_y
+        Y-component of the flow field (unit vectors).
+    image
+        Optional BGR image to draw on. If None, creates a white canvas.
+    step
+        Grid spacing in pixels between arrows.
+    scale
+        Length scaling factor for arrows.
+    color
+        BGR color tuple for arrows. Default is green (0, 255, 0).
+
+    Returns
+    -------
+    np.ndarray
+        BGR uint8 image with flow field arrows drawn.
+    """
+    h, w = flow_x.shape
+
+    # Create canvas if no image provided
+    if image is None:
+        canvas = np.full((h, w, 3), 255, dtype=np.uint8)
+    else:
+        canvas = image.copy()
+
+    # Draw arrows at grid points
+    for y in range(step // 2, h, step):
+        for x in range(step // 2, w, step):
+            # Get flow vector at this position
+            vx = flow_x[y, x]
+            vy = flow_y[y, x]
+
+            # Calculate arrow endpoints
+            start_point = (x, y)
+            end_x = int(x + scale * vx)
+            end_y = int(y + scale * vy)
+            end_point = (end_x, end_y)
+
+            # Draw arrow
+            cv2.arrowedLine(
+                canvas,
+                start_point,
+                end_point,
+                color,
+                thickness=1,
+                tipLength=0.3,
+            )
+
+    return canvas
+
+
+def overlay_lic(
+    lic_image: np.ndarray,
+    image: np.ndarray,
+    alpha: float = 0.5,
+) -> np.ndarray:
+    """Overlay LIC texture on an image with alpha blending.
+
+    Parameters
+    ----------
+    lic_image
+        Grayscale LIC texture with values in [0, 1].
+    image
+        BGR image to overlay onto.
+    alpha
+        Blending weight for LIC texture. 0 = only image, 1 = only LIC.
+
+    Returns
+    -------
+    np.ndarray
+        BGR uint8 image with LIC overlay.
+    """
+    # Convert LIC to BGR
+    lic_uint8 = (lic_image * 255).astype(np.uint8)
+    lic_bgr = cv2.cvtColor(lic_uint8, cv2.COLOR_GRAY2BGR)
+
+    # Alpha blend
+    result = alpha * lic_bgr + (1 - alpha) * image
+    result = np.clip(result, 0, 255).astype(np.uint8)
+
+    return result

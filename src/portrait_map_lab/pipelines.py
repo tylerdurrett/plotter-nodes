@@ -26,6 +26,7 @@ from portrait_map_lab.flow_fields import (
     compute_contour_flow,
 )
 from portrait_map_lab.landmarks import detect_landmarks
+from portrait_map_lab.lic import compute_lic
 from portrait_map_lab.luminance import compute_tonal_target
 from portrait_map_lab.masks import build_region_masks
 from portrait_map_lab.models import (
@@ -40,7 +41,14 @@ from portrait_map_lab.models import (
 )
 from portrait_map_lab.remap import remap_influence
 from portrait_map_lab.storage import save_array, save_image
-from portrait_map_lab.viz import colorize_map, draw_contour, draw_landmarks, make_contact_sheet
+from portrait_map_lab.viz import (
+    colorize_map,
+    draw_contour,
+    draw_landmarks,
+    make_contact_sheet,
+    overlay_lic,
+    visualize_flow_field,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -629,12 +637,12 @@ def save_flow_outputs(
     ```
     output_dir/flow/
         etf_coherence.png
-        etf_quiver.png  (deferred to Phase 5)
-        contour_flow_quiver.png  (deferred to Phase 5)
+        etf_quiver.png
+        contour_flow_quiver.png
         blend_weight.png
-        flow_lic.png  (deferred to Phase 5)
-        flow_lic_overlay.png  (deferred to Phase 5)
-        flow_quiver.png  (deferred to Phase 5)
+        flow_lic.png
+        flow_lic_overlay.png
+        flow_quiver.png
         flow_x_raw.npy
         flow_y_raw.npy
         contact_sheet.png
@@ -663,24 +671,75 @@ def save_flow_outputs(
     weight_img = colorize_map(result.blend_weight, colormap="viridis")
     save_image(weight_img, flow_dir / "blend_weight.png")
 
+    # Generate and save quiver plots
+    logger.info("Generating flow field visualizations...")
+
+    # ETF quiver plot
+    etf_quiver = visualize_flow_field(
+        result.etf.tangent_x,
+        result.etf.tangent_y,
+        image=image,
+        step=20,
+        scale=15.0,
+        color=(255, 0, 0),  # Blue for ETF
+    )
+    save_image(etf_quiver, flow_dir / "etf_quiver.png")
+
+    # Contour flow quiver plot
+    contour_quiver = visualize_flow_field(
+        result.contour_flow_x,
+        result.contour_flow_y,
+        image=image,
+        step=20,
+        scale=15.0,
+        color=(0, 255, 255),  # Yellow for contour flow
+    )
+    save_image(contour_quiver, flow_dir / "contour_flow_quiver.png")
+
+    # Blended flow quiver plot
+    flow_quiver = visualize_flow_field(
+        result.flow_x,
+        result.flow_y,
+        image=image,
+        step=20,
+        scale=15.0,
+        color=(0, 255, 0),  # Green for blended flow
+    )
+    save_image(flow_quiver, flow_dir / "flow_quiver.png")
+
+    # Generate LIC visualization
+    logger.info("Computing LIC visualization...")
+    lic_image = compute_lic(result.flow_x, result.flow_y)
+
+    # Save LIC as grayscale
+    lic_uint8 = (lic_image * 255).astype(np.uint8)
+    save_image(lic_uint8, flow_dir / "flow_lic.png")
+
+    # Save LIC overlay if we have an input image
+    if image is not None:
+        lic_overlay = overlay_lic(lic_image, image, alpha=0.5)
+        save_image(lic_overlay, flow_dir / "flow_lic_overlay.png")
+
     # Save raw flow field arrays for downstream use
     save_array(result.flow_x, flow_dir / "flow_x_raw.npy")
     save_array(result.flow_y, flow_dir / "flow_y_raw.npy")
 
-    # Build contact sheet (quiver and LIC overlays deferred to Phase 5)
+    # Build enhanced contact sheet with all visualizations
     contact_images = {}
     if image is not None:
         contact_images["Original"] = image
 
     contact_images["ETF Coherence"] = coherence_img
+    contact_images["ETF Quiver"] = etf_quiver
+    contact_images["Contour Flow"] = contour_quiver
     contact_images["Blend Weight"] = weight_img
+    contact_images["Flow Quiver"] = flow_quiver
+    contact_images["Flow LIC"] = cv2.cvtColor(lic_uint8, cv2.COLOR_GRAY2BGR)
 
-    # For now, visualize flow magnitude as placeholder
-    flow_magnitude = np.sqrt(result.flow_x**2 + result.flow_y**2)
-    flow_mag_img = colorize_map(flow_magnitude, colormap="hot")
-    contact_images["Flow Magnitude"] = flow_mag_img
+    if image is not None:
+        contact_images["LIC Overlay"] = lic_overlay
 
-    contact_sheet = make_contact_sheet(contact_images, columns=3)
+    contact_sheet = make_contact_sheet(contact_images, columns=4)
     save_image(contact_sheet, flow_dir / "contact_sheet.png")
 
     logger.info("All flow outputs saved successfully")
