@@ -101,9 +101,7 @@ def segment_image(image: np.ndarray) -> np.ndarray:
 
     # Upscale from model resolution (256x256) to original image size
     if category_mask.shape != (h, w):
-        category_mask = cv2.resize(
-            category_mask, (w, h), interpolation=cv2.INTER_NEAREST
-        )
+        category_mask = cv2.resize(category_mask, (w, h), interpolation=cv2.INTER_NEAREST)
 
     return category_mask.astype(np.uint8)
 
@@ -152,9 +150,7 @@ def extract_segmentation_polygon(
     binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
 
     # Find contours
-    contours, _ = cv2.findContours(
-        binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if not contours:
         raise ValueError(

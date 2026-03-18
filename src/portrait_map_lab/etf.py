@@ -111,12 +111,16 @@ def extract_tangent_field(
     near_zero_mask = np.abs(Jxy) < 1e-10
 
     # Standard case: use (Jxy, λ₂ - Jxx) or (λ₂ - Jyy, Jxy)
-    tx = np.where(near_zero_mask,
-                  np.where(Jxx > Jyy, 0.0, 1.0),  # Horizontal edge -> horizontal tangent
-                  Jxy)
-    ty = np.where(near_zero_mask,
-                  np.where(Jxx > Jyy, 1.0, 0.0),  # Vertical edge -> vertical tangent
-                  lambda2 - Jxx)
+    tx = np.where(
+        near_zero_mask,
+        np.where(Jxx > Jyy, 0.0, 1.0),  # Horizontal edge -> horizontal tangent
+        Jxy,
+    )
+    ty = np.where(
+        near_zero_mask,
+        np.where(Jxx > Jyy, 1.0, 0.0),  # Vertical edge -> vertical tangent
+        lambda2 - Jxx,
+    )
 
     # Normalize to unit length
     magnitude = np.sqrt(tx * tx + ty * ty)
@@ -223,7 +227,8 @@ def compute_etf(image: np.ndarray, config: ETFConfig | None = None) -> ETFResult
     # Refine tangent field if requested
     if config.refine_iterations > 0:
         tx, ty = refine_tangent_field(
-            tx, ty,
+            tx,
+            ty,
             sigma=config.refine_sigma,
             iterations=config.refine_iterations,
         )

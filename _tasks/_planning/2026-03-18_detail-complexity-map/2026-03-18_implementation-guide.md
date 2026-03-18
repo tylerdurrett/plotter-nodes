@@ -493,13 +493,23 @@ docs/
 
 ### 8.1 Full test suite and linting
 
-- [ ] Run `uv run pytest` — all tests pass
-- [ ] Run `uv run ruff check` — clean
-- [ ] Run `uv run ruff format --check` — clean
+- [x] Run `uv run pytest` — all tests pass
+- [x] Run `uv run ruff check` — clean
+- [x] Run `uv run ruff format --check` — clean
 
 **Acceptance Criteria:**
-- All tests pass with no failures
-- Linting and formatting clean
+- All tests pass with no failures ✅
+- Linting and formatting clean ✅
+
+**Implementation Notes:**
+- Phase 8.1 completed successfully (2026-03-18)
+- Fixed unused import in test_complexity_pipeline.py
+- Added missing newline at end of test_complexity_pipeline.py
+- Applied auto-fixes for import sorting in multiple files
+- Ran ruff format to fix formatting issues in 20 files
+- All 369 tests collected, 366 passed, 3 skipped (face detection tests)
+- Ruff check passes with no errors on src, tests, and scripts directories
+- Ruff format check confirms all files are properly formatted
 
 ### 8.2 Visual verification
 

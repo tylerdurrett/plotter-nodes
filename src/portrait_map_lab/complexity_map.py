@@ -82,9 +82,7 @@ def compute_laplacian_energy(gray: np.ndarray, sigma: float = 3.0) -> np.ndarray
 
 
 def compute_multiscale_gradient_energy(
-    gray: np.ndarray,
-    scales: list[float],
-    weights: list[float]
+    gray: np.ndarray, scales: list[float], weights: list[float]
 ) -> np.ndarray:
     """Compute weighted sum of gradient energies at multiple scales.
 
@@ -196,9 +194,7 @@ def apply_mask(map_array: np.ndarray, mask: np.ndarray) -> np.ndarray:
 
 
 def compute_complexity_map(
-    image: np.ndarray,
-    config: ComplexityConfig | None = None,
-    mask: np.ndarray | None = None
+    image: np.ndarray, config: ComplexityConfig | None = None, mask: np.ndarray | None = None
 ) -> ComplexityResult:
     """Compute complexity map for an image.
 
@@ -280,7 +276,5 @@ def compute_complexity_map(
         raw_complexity = apply_mask(raw_complexity, mask)
 
     return ComplexityResult(
-        raw_complexity=raw_complexity,
-        complexity=complexity,
-        metric=config.metric
+        raw_complexity=raw_complexity, complexity=complexity, metric=config.metric
     )

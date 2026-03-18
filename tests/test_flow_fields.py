@@ -115,7 +115,7 @@ class TestAlignTangentField:
     def test_dot_product_threshold(self):
         """Test that flip occurs exactly at dot product < 0."""
         # Create vectors at various angles
-        angles = np.linspace(0, 2*np.pi, 20)
+        angles = np.linspace(0, 2 * np.pi, 20)
         tx = np.cos(angles).reshape(-1, 1)
         ty = np.sin(angles).reshape(-1, 1)
 
@@ -271,9 +271,7 @@ class TestBlendFlowFields:
         contour_fy = np.ones((3, 3), dtype=np.float64)
 
         # Use different alpha values
-        alpha = np.array([[0.0, 0.5, 1.0],
-                         [0.25, 0.5, 0.75],
-                         [0.0, 0.5, 1.0]], dtype=np.float64)
+        alpha = np.array([[0.0, 0.5, 1.0], [0.25, 0.5, 0.75], [0.0, 0.5, 1.0]], dtype=np.float64)
 
         # Use high threshold to avoid fallback
         flow_x, flow_y = blend_flow_fields(

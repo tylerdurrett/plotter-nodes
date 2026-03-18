@@ -108,11 +108,7 @@ class TestComplexityResult:
     def test_creation(self):
         raw = np.random.rand(100, 100).astype(np.float64)
         normalized = np.clip(raw / raw.max(), 0, 1).astype(np.float64)
-        result = ComplexityResult(
-            raw_complexity=raw,
-            complexity=normalized,
-            metric="gradient"
-        )
+        result = ComplexityResult(raw_complexity=raw, complexity=normalized, metric="gradient")
         assert result.raw_complexity.shape == (100, 100)
         assert result.complexity.shape == (100, 100)
         assert result.metric == "gradient"
@@ -121,9 +117,7 @@ class TestComplexityResult:
 
     def test_frozen(self):
         result = ComplexityResult(
-            raw_complexity=np.zeros((50, 50)),
-            complexity=np.zeros((50, 50)),
-            metric="laplacian"
+            raw_complexity=np.zeros((50, 50)), complexity=np.zeros((50, 50)), metric="laplacian"
         )
         with pytest.raises(AttributeError):
             result.metric = "gradient"  # type: ignore[misc]

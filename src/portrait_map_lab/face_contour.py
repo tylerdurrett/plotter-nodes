@@ -230,9 +230,7 @@ def compute_sdf_from_polygon(
     return compute_signed_distance(contour_mask, filled_mask)
 
 
-def average_signed_distances(
-    sdfs: list[np.ndarray], clamp: float = 0.0
-) -> np.ndarray:
+def average_signed_distances(sdfs: list[np.ndarray], clamp: float = 0.0) -> np.ndarray:
     """Compute the elementwise mean of multiple signed distance fields.
 
     Parameters
@@ -261,9 +259,7 @@ def average_signed_distances(
     shape = sdfs[0].shape
     for i, sdf in enumerate(sdfs[1:], 1):
         if sdf.shape != shape:
-            raise ValueError(
-                f"SDF shape mismatch: sdfs[0] is {shape}, sdfs[{i}] is {sdf.shape}"
-            )
+            raise ValueError(f"SDF shape mismatch: sdfs[0] is {shape}, sdfs[{i}] is {sdf.shape}")
     if clamp > 0:
         result = np.clip(sdfs[0], -clamp, clamp).astype(np.float64)
         for sdf in sdfs[1:]:

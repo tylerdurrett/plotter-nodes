@@ -184,9 +184,9 @@ class TestBuildExportBundle:
         bundle = build_export_bundle(result, "test.jpg")
 
         original = result.density_result.density_target.astype(np.float32)
-        decoded = np.frombuffer(
-            bundle.binary_maps["density_target"], dtype=np.float32
-        ).reshape(height, width)
+        decoded = np.frombuffer(bundle.binary_maps["density_target"], dtype=np.float32).reshape(
+            height, width
+        )
         np.testing.assert_array_equal(original, decoded)
 
     def test_little_endian_byte_order(self):

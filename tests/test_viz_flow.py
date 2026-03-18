@@ -71,7 +71,7 @@ class TestVisualizeFlowField:
         # Check that there are red pixels in the result
         red_pixels = np.logical_and(
             result[:, :, 2] > 200,  # High red channel
-            result[:, :, 0] < 50,    # Low blue channel
+            result[:, :, 0] < 50,  # Low blue channel
         )
         assert np.any(red_pixels)  # Should have some red pixels from arrows
 
@@ -149,7 +149,7 @@ class TestOverlayLIC:
         """Test overlay with varying LIC values."""
         h, w = 80, 80
         # Create gradient LIC
-        lic_image = np.linspace(0, 1, h*w).reshape(h, w).astype(np.float64)
+        lic_image = np.linspace(0, 1, h * w).reshape(h, w).astype(np.float64)
         image = np.full((h, w, 3), 128, dtype=np.uint8)
 
         result = overlay_lic(lic_image, image, alpha=0.5)

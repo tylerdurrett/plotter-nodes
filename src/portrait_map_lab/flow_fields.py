@@ -137,7 +137,7 @@ def compute_blend_weight(
         config = FlowConfig()
 
     # Apply power function to control blend curve
-    alpha = coherence ** config.coherence_power
+    alpha = coherence**config.coherence_power
 
     # Ensure values are in valid range
     alpha = np.clip(alpha, 0.0, 1.0)

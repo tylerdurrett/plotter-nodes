@@ -152,9 +152,7 @@ class TestComputeMultiscaleGradientEnergy:
         # Single scale (coarse)
         energy_coarse = compute_multiscale_gradient_energy(gray, [8.0], [1.0])
         # Multi-scale
-        energy_multi = compute_multiscale_gradient_energy(
-            gray, [1.0, 8.0], [0.5, 0.5]
-        )
+        energy_multi = compute_multiscale_gradient_energy(gray, [1.0, 8.0], [0.5, 0.5])
 
         # Multi-scale should be approximately the weighted average
         # Allow for some tolerance due to numerical precision
@@ -164,9 +162,7 @@ class TestComputeMultiscaleGradientEnergy:
     def test_output_properties(self):
         """Test output is float64 and non-negative."""
         gray = np.random.rand(60, 80).astype(np.float64)
-        energy = compute_multiscale_gradient_energy(
-            gray, [2.0, 4.0], [0.6, 0.4]
-        )
+        energy = compute_multiscale_gradient_energy(gray, [2.0, 4.0], [0.6, 0.4])
 
         assert energy.dtype == np.float64
         assert np.all(energy >= 0)
@@ -303,9 +299,7 @@ class TestComputeComplexityMap:
         """Test multiscale_gradient metric dispatch."""
         image = np.random.rand(50, 50).astype(np.float64)
         config = ComplexityConfig(
-            metric="multiscale_gradient",
-            scales=[1.0, 2.0],
-            scale_weights=[0.6, 0.4]
+            metric="multiscale_gradient", scales=[1.0, 2.0], scale_weights=[0.6, 0.4]
         )
 
         result = compute_complexity_map(image, config)

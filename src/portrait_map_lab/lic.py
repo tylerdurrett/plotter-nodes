@@ -66,7 +66,7 @@ def compute_lic(
                     noise,
                     [current_y, current_x],
                     order=1,  # Linear interpolation
-                    mode='nearest',  # Handle boundaries
+                    mode="nearest",  # Handle boundaries
                     prefilter=False,
                 )
             else:
@@ -85,14 +85,14 @@ def compute_lic(
                     flow_x,
                     [current_y, current_x],
                     order=1,
-                    mode='nearest',
+                    mode="nearest",
                     prefilter=False,
                 )
                 flow_y_sampled = ndimage.map_coordinates(
                     flow_y,
                     [current_y, current_x],
                     order=1,
-                    mode='nearest',
+                    mode="nearest",
                     prefilter=False,
                 )
             else:

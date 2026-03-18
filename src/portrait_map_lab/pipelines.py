@@ -314,8 +314,10 @@ def run_contour_pipeline(image: np.ndarray, config: ContourConfig | None = None)
         smooth_sigma = max(image_shape) * 0.01
         logger.info("Smoothing contour (sigma=%.1f)...", smooth_sigma)
         contour_polygon, contour_mask, filled_mask = derive_contour_from_sdf(
-            signed_distance, thickness=config.contour_thickness,
-            epsilon_factor=config.epsilon_factor, smooth_sigma=smooth_sigma,
+            signed_distance,
+            thickness=config.contour_thickness,
+            epsilon_factor=config.epsilon_factor,
+            smooth_sigma=smooth_sigma,
         )
         # Recompute SDF from smoothed contour for consistency
         signed_distance = compute_signed_distance(contour_mask, filled_mask)
@@ -374,14 +376,16 @@ def _compute_average_contour(
     logger.info("  [2/3] Segmentation face contour...")
     category_mask = segment_image(image)
     poly_face = extract_segmentation_polygon(
-        category_mask, _get_segmentation_classes("segmentation_face"),
+        category_mask,
+        _get_segmentation_classes("segmentation_face"),
         epsilon_factor=config.epsilon_factor,
     )
     sdf_face = compute_sdf_from_polygon(poly_face, image_shape, config.contour_thickness)
 
     logger.info("  [3/3] Segmentation head contour...")
     poly_head = extract_segmentation_polygon(
-        category_mask, _get_segmentation_classes("segmentation_head"),
+        category_mask,
+        _get_segmentation_classes("segmentation_head"),
         epsilon_factor=config.epsilon_factor,
     )
     sdf_head = compute_sdf_from_polygon(poly_head, image_shape, config.contour_thickness)
@@ -394,8 +398,10 @@ def _compute_average_contour(
     # Smooth sigma scales with image size for consistent results across resolutions
     smooth_sigma = max(image_shape) * 0.01
     contour_polygon, contour_mask, filled_mask = derive_contour_from_sdf(
-        signed_distance, thickness=config.contour_thickness,
-        epsilon_factor=0.001, smooth_sigma=smooth_sigma,
+        signed_distance,
+        thickness=config.contour_thickness,
+        epsilon_factor=0.001,
+        smooth_sigma=smooth_sigma,
     )
 
     logger.info("Preparing directional distance (mode: %s)...", config.direction)
@@ -542,8 +548,11 @@ def run_density_pipeline(
     luminance, clahe_luminance, tonal_target = compute_tonal_target(image, config.luminance)
 
     # Step 2: Combine feature and contour importance maps
-    logger.info("Combining importance maps (features: %.2f, contour: %.2f)...",
-                config.feature_weight, config.contour_weight)
+    logger.info(
+        "Combining importance maps (features: %.2f, contour: %.2f)...",
+        config.feature_weight,
+        config.contour_weight,
+    )
 
     # Create maps and weights dictionaries for combine_maps
     importance_maps = {
@@ -559,8 +568,9 @@ def run_density_pipeline(
     importance = combine_maps(importance_maps, importance_weights)
 
     # Step 3: Build final density target
-    logger.info("Building density target (mode: %s, gamma: %.2f)...",
-                config.tonal_blend_mode, config.gamma)
+    logger.info(
+        "Building density target (mode: %s, gamma: %.2f)...", config.tonal_blend_mode, config.gamma
+    )
     density_target = build_density_target(
         tonal_target=tonal_target,
         importance=importance,
@@ -727,9 +737,12 @@ def save_complexity_outputs(
     logger.info("Saving complexity outputs to %s", complexity_dir)
 
     # Save raw complexity heatmap (colorized with viridis)
-    raw_img = colorize_map(result.raw_complexity / result.raw_complexity.max()
-                           if result.raw_complexity.max() > 0 else result.raw_complexity,
-                           colormap="viridis")
+    raw_img = colorize_map(
+        result.raw_complexity / result.raw_complexity.max()
+        if result.raw_complexity.max() > 0
+        else result.raw_complexity,
+        colormap="viridis",
+    )
     save_image(raw_img, complexity_dir / f"{result.metric}_energy.png")
 
     # Save raw complexity array
@@ -748,9 +761,9 @@ def save_complexity_outputs(
     if image is not None:
         # Resize input image to match complexity map dimensions if needed
         if image.shape[:2] != result.complexity.shape:
-            contact_images["Input"] = cv2.resize(image,
-                                                 (result.complexity.shape[1],
-                                                  result.complexity.shape[0]))
+            contact_images["Input"] = cv2.resize(
+                image, (result.complexity.shape[1], result.complexity.shape[0])
+            )
         else:
             contact_images["Input"] = image
 
@@ -830,8 +843,11 @@ def run_flow_pipeline(
     blend_weight = compute_blend_weight(etf_result.coherence, config)
 
     # Step 5: Blend ETF and contour flow
-    logger.info("Blending flow fields (mode: %s, threshold: %.2f)...",
-                config.blend_mode, config.fallback_threshold)
+    logger.info(
+        "Blending flow fields (mode: %s, threshold: %.2f)...",
+        config.blend_mode,
+        config.fallback_threshold,
+    )
     flow_x, flow_y = blend_flow_fields(
         aligned_tx,
         aligned_ty,
@@ -846,8 +862,7 @@ def run_flow_pipeline(
     if complexity_result is not None:
         logger.info("Computing flow speed from complexity map...")
         flow_speed = compute_flow_speed(complexity_result.complexity, speed_config)
-        logger.info("Flow speed computed (min=%.2f, max=%.2f)",
-                   flow_speed.min(), flow_speed.max())
+        logger.info("Flow speed computed (min=%.2f, max=%.2f)", flow_speed.min(), flow_speed.max())
 
     logger.info("Flow field pipeline completed successfully")
 
@@ -1107,8 +1122,10 @@ def _run_contour_pipeline_with_landmarks(
         smooth_sigma = max(image_shape) * 0.01
         logger.info("Smoothing contour (sigma=%.1f)...", smooth_sigma)
         contour_polygon, contour_mask, filled_mask = derive_contour_from_sdf(
-            signed_distance, thickness=config.contour_thickness,
-            epsilon_factor=config.epsilon_factor, smooth_sigma=smooth_sigma,
+            signed_distance,
+            thickness=config.contour_thickness,
+            epsilon_factor=config.epsilon_factor,
+            smooth_sigma=smooth_sigma,
         )
         signed_distance = compute_signed_distance(contour_mask, filled_mask)
 
@@ -1199,16 +1216,12 @@ def run_all_pipelines(
 
     # Step 3: Run contour pipeline with shared landmarks
     logger.info("\n--- Stage 2: Contour Pipeline ---")
-    contour_result = _run_contour_pipeline_with_landmarks(
-        landmarks, contour_config, image=image
-    )
+    contour_result = _run_contour_pipeline_with_landmarks(landmarks, contour_config, image=image)
     logger.info("Contour pipeline completed")
 
     # Step 4: Run density pipeline using results from features and contour
     logger.info("\n--- Stage 3: Density Composition Pipeline ---")
-    density_result = run_density_pipeline(
-        image, feature_result, contour_result, compose_config
-    )
+    density_result = run_density_pipeline(image, feature_result, contour_result, compose_config)
     logger.info("Density pipeline completed")
 
     # Step 5: Optionally run complexity pipeline using contour mask

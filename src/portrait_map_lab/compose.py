@@ -59,8 +59,7 @@ def compose_maps(map_a: np.ndarray, map_b: np.ndarray, mode: str = "multiply") -
         result = (a + b) / 2.0
     else:
         raise ValueError(
-            f"Unknown blend mode: {mode}. "
-            f"Valid modes are: multiply, screen, max, weighted"
+            f"Unknown blend mode: {mode}. Valid modes are: multiply, screen, max, weighted"
         )
 
     # Ensure output is in [0, 1]
@@ -68,10 +67,7 @@ def compose_maps(map_a: np.ndarray, map_b: np.ndarray, mode: str = "multiply") -
 
 
 def build_density_target(
-    tonal_target: np.ndarray,
-    importance: np.ndarray,
-    mode: str = "multiply",
-    gamma: float = 1.0
+    tonal_target: np.ndarray, importance: np.ndarray, mode: str = "multiply", gamma: float = 1.0
 ) -> np.ndarray:
     """Build density target by composing tonal and importance maps.
 

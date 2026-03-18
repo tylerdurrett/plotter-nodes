@@ -83,9 +83,7 @@ class TestExtractSegmentationPolygon:
     def test_simplification_reduces_vertices(self, test_image):
         """Non-zero epsilon should reduce vertex count vs no simplification."""
         mask = segment_image(test_image)
-        full = extract_segmentation_polygon(
-            mask, [SEGMENTATION_FACE_SKIN], epsilon_factor=0
-        )
+        full = extract_segmentation_polygon(mask, [SEGMENTATION_FACE_SKIN], epsilon_factor=0)
         simplified = extract_segmentation_polygon(
             mask, [SEGMENTATION_FACE_SKIN], epsilon_factor=0.01
         )

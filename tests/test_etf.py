@@ -253,9 +253,8 @@ class TestComputeETF:
 
         if significant_mask.any():
             # Most tangent vectors at significant points should be more horizontal than vertical
-            horizontal_dominant = (
-                np.abs(edge_region_x[significant_mask])
-                > np.abs(edge_region_y[significant_mask])
+            horizontal_dominant = np.abs(edge_region_x[significant_mask]) > np.abs(
+                edge_region_y[significant_mask]
             )
             assert horizontal_dominant.sum() > 0.6 * horizontal_dominant.size
         else:

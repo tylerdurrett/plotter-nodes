@@ -670,14 +670,9 @@ def test_all_pipeline_with_custom_configs(test_image):
     feature_config = PipelineConfig(weights={"eyes": 0.7, "mouth": 0.3})
     contour_config = ContourConfig(direction="outward")
     compose_config = ComposeConfig(
-        luminance=LuminanceConfig(clip_limit=3.0),
-        tonal_blend_mode="screen",
-        gamma=1.5
+        luminance=LuminanceConfig(clip_limit=3.0), tonal_blend_mode="screen", gamma=1.5
     )
-    flow_config = FlowConfig(
-        etf=ETFConfig(refine_iterations=3),
-        coherence_power=3.0
-    )
+    flow_config = FlowConfig(etf=ETFConfig(refine_iterations=3), coherence_power=3.0)
     lic_config = LICConfig(length=50, seed=123)
 
     # Run with custom configs

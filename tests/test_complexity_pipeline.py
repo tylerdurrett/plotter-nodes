@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from portrait_map_lab.complexity_map import compute_complexity_map
 from portrait_map_lab.models import (
     ComplexityConfig,
     ComplexityResult,
@@ -249,6 +248,7 @@ class TestAllPipelinesWithComplexity:
         center = (100, 100)
         axes = (40, 50)
         import cv2
+
         cv2.ellipse(image, center, axes, 0, 0, 360, (255, 255, 255), -1)
 
         # Skip this test if face detection would fail
@@ -270,6 +270,7 @@ class TestAllPipelinesWithComplexity:
         center = (100, 100)
         axes = (40, 50)
         import cv2
+
         cv2.ellipse(image, center, axes, 0, 0, 360, (255, 255, 255), -1)
 
         complexity_config = ComplexityConfig(metric="gradient")
@@ -303,6 +304,7 @@ class TestAllPipelinesWithComplexity:
             center = (100, 100)
             axes = (40, 50)
             import cv2
+
             cv2.ellipse(image, center, axes, 0, 0, 360, (255, 255, 255), -1)
 
             complexity_config = ComplexityConfig()
@@ -310,6 +312,7 @@ class TestAllPipelinesWithComplexity:
             # Skip if face detection fails
             try:
                 from portrait_map_lab.pipelines import save_all_outputs
+
                 result = run_all_pipelines(image, complexity_config=complexity_config)
                 save_all_outputs(result, output_dir, image)
             except ValueError as e:
