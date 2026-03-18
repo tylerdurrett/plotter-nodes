@@ -61,6 +61,11 @@ The Portrait Map Lab pipeline implements a modular, extensible architecture for 
 | `remap.py` | Influence mapping | NumPy | Influence arrays |
 | `combine.py` | Map combination | NumPy | Combined map |
 | `pipelines.py` | Orchestration | All above | PipelineResult, ContourResult |
+| `luminance.py` | Luminance & CLAHE | OpenCV | Tonal targets |
+| `compose.py` | Map composition | NumPy | Density targets |
+| `etf.py` | Edge Tangent Field | OpenCV, SciPy | Tangent fields, coherence |
+| `flow_fields.py` | Flow field blending | NumPy | Combined flow fields |
+| `lic.py` | LIC visualization | SciPy | Flow textures |
 
 ### Support Modules
 

@@ -562,23 +562,34 @@ output/<image>/
 - Each doc follows the existing stage doc pattern (Overview, Purpose, Implementation, Output Format, Configuration, Visualization, Next Stage) ✅
 - Function signatures match actual implementation ✅
 
-### 7.2 Update architecture and README
+### 7.2 Update architecture and README ✅ COMPLETE
 
-- [ ] Update `docs/pipeline/architecture.md`:
+**Implementation Notes:**
+- Successfully updated all three documentation files with comprehensive coverage of the new pipelines
+- Added detailed data flow diagram showing all 4 pipelines (features, contour, density, flow)
+- Updated Module Architecture table with all 5 new modules and their responsibilities
+- Added all new data structures (configs and results) to the Data Structures section
+- Created extension examples for both flow field and density composition systems
+- Updated README with complete quick-start examples for all pipelines
+- Added CLI documentation for the new `density` and `flow` subcommands
+- Updated vision.md to mark Stages 1, 2, and 3 as complete with implementation details
+- All documentation is internally consistent and accurately reflects the implementation
+
+- [x] Update `docs/pipeline/architecture.md`:
   - Add density and flow modules to the Module Architecture table
   - Extend the data flow diagram to include Stage 2 and Stage 3
   - Add new result/config types to the Data Structures section
   - Update Extension Points with flow field extension examples
-- [ ] Update `docs/pipeline/README.md`:
+- [x] Update `docs/pipeline/README.md`:
   - Add density and flow to the quick-start examples
   - Update the pipeline stage list
   - Add `all` subcommand expanded description
-- [ ] Update `docs/vision.md`: mark Stage 2 and Stage 3 initial flow fields as complete; note contour-following flow + ETF blending as the implemented approach
+- [x] Update `docs/vision.md`: mark Stage 2 and Stage 3 initial flow fields as complete; note contour-following flow + ETF blending as the implemented approach
 
-**Acceptance Criteria:**
-- Architecture doc data flow diagram matches the actual implementation
-- README quick-start examples work when copy-pasted
-- Vision doc accurately reflects current project state
+**Acceptance Criteria:** ✅ All met
+- Architecture doc data flow diagram matches the actual implementation ✅
+- README quick-start examples work when copy-pasted ✅
+- Vision doc accurately reflects current project state ✅
 
 ---
 
