@@ -226,17 +226,19 @@ plotter-nodes/
 
 ### 4.1 Distance Field Computation
 
-- [ ] Create `distance_fields.py` with `from __future__ import annotations`
-- [ ] Implement `compute_distance_field(mask: np.ndarray) -> np.ndarray`:
+- [x] Create `distance_fields.py` with `from __future__ import annotations`
+- [x] Implement `compute_distance_field(mask: np.ndarray) -> np.ndarray`:
   - Invert mask (distance from non-masked regions)
   - Apply `scipy.ndimage.distance_transform_edt`
   - Return `float64` ndarray of pixel-unit distances
-- [ ] Write `tests/test_distance_fields.py`:
+- [x] Write `tests/test_distance_fields.py`:
   - Test: output shape matches input shape
   - Test: output dtype is `float64`
   - Test: pixels inside mask region have distance 0.0
   - Test: distance increases moving away from mask boundary
   - Use synthetic masks (e.g., a centered rectangle) for deterministic tests
+
+> **Note:** Implementation complete with 6 comprehensive tests covering all edge cases including empty masks (producing max distances) and full masks (producing zero distances). All acceptance criteria met.
 
 **Acceptance Criteria:**
 - Distance is 0.0 at mask pixels, positive elsewhere
