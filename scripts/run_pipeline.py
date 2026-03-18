@@ -120,8 +120,8 @@ def main() -> int:
         # Extract image name for output subdirectory
         image_name = args.image_path.stem
 
-        # Create output directory
-        output_dir = ensure_output_dir(args.output_dir, image_name)
+        # Create output directory with pipeline subdirectory
+        output_dir = ensure_output_dir(args.output_dir, image_name, pipeline="features")
         logger.info("Output directory: %s", output_dir)
 
         # Build pipeline configuration from CLI arguments

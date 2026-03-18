@@ -71,10 +71,11 @@ def load_image(path: str | Path) -> np.ndarray:
     return image
 
 
-def ensure_output_dir(base: str | Path, image_name: str) -> Path:
+def ensure_output_dir(base: str | Path, image_name: str, pipeline: str | None = None) -> Path:
     """Create output directory structure for an image.
 
-    Creates a directory at <base>/<image_name>/ and returns the path.
+    Creates a directory at <base>/<image_name>/ or <base>/<image_name>/<pipeline>/
+    if pipeline is specified, and returns the path.
 
     Parameters
     ----------
@@ -82,12 +83,19 @@ def ensure_output_dir(base: str | Path, image_name: str) -> Path:
         Base output directory.
     image_name
         Name of the image (used as subdirectory name).
+    pipeline
+        Optional pipeline name. If provided, creates a subdirectory for the pipeline.
+        For example, "features" creates <base>/<image_name>/features/.
+        If None, uses the original structure <base>/<image_name>/.
 
     Returns
     -------
     Path
         The created output directory path.
     """
-    output_dir = Path(base) / image_name
+    if pipeline is not None:
+        output_dir = Path(base) / image_name / pipeline
+    else:
+        output_dir = Path(base) / image_name
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir

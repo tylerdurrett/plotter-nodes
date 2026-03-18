@@ -55,7 +55,7 @@ The `all` subcommand produces both subdirectories side by side.
 
 ---
 
-## Phase 1: Output Directory Structure
+## Phase 1: Output Directory Structure ✅
 
 **Purpose:** Add pipeline-segmented output directories so each pipeline writes to its own subdirectory (e.g., `output/<image>/features/`, `output/<image>/contour/`).
 
@@ -63,8 +63,8 @@ The `all` subcommand produces both subdirectories side by side.
 
 ### 1.1 Update ensure_output_dir in storage.py
 
-- [ ] Add optional `pipeline: str | None = None` parameter to `ensure_output_dir`. When provided, the output path becomes `<base>/<image_name>/<pipeline>/`; when `None`, behavior is unchanged (`<base>/<image_name>/`).
-- [ ] Update docstring to document the new parameter and directory structure.
+- [x] Add optional `pipeline: str | None = None` parameter to `ensure_output_dir`. When provided, the output path becomes `<base>/<image_name>/<pipeline>/`; when `None`, behavior is unchanged (`<base>/<image_name>/`).
+- [x] Update docstring to document the new parameter and directory structure.
 
 **Acceptance Criteria:**
 - `ensure_output_dir("output", "img", pipeline="features")` returns `output/img/features/` and creates it
@@ -73,12 +73,18 @@ The `all` subcommand produces both subdirectories side by side.
 
 ### 1.2 Wire pipeline name through run_pipeline.py and save_pipeline_outputs
 
-- [ ] Update `run_pipeline.py` to pass `pipeline="features"` to `ensure_output_dir`
-- [ ] Verify existing pipeline outputs now go to `output/<image>/features/`
+- [x] Update `run_pipeline.py` to pass `pipeline="features"` to `ensure_output_dir`
+- [x] Verify existing pipeline outputs now go to `output/<image>/features/`
 
 **Acceptance Criteria:**
-- `uv run python scripts/run_pipeline.py test_images/20230427-171404.JPG` writes to `output/20230427-171404/features/`
-- All existing output files appear in the `features/` subdirectory
+- `uv run python scripts/run_pipeline.py test_images/20230427-171404.JPG` writes to `output/20230427-171404/features/` ✅
+- All existing output files appear in the `features/` subdirectory ✅
+
+**Implementation Notes:**
+- Successfully implemented Phase 1 with full backward compatibility
+- All 71 existing tests pass without modification
+- Output structure verified: files now correctly go to `output/<image_name>/features/`
+- Ready for Phase 2: Data Models implementation
 
 ---
 
