@@ -116,7 +116,7 @@ The `all` subcommand produces both subdirectories side by side.
 
 ---
 
-## Phase 3: Core Contour Module
+## Phase 3: Core Contour Module ✅
 
 **Purpose:** Implement all contour-specific logic as standalone composable functions.
 
@@ -124,61 +124,70 @@ The `all` subcommand produces both subdirectories side by side.
 
 ### 3.1 Face oval indices and polygon extraction
 
-- [ ] Create `src/portrait_map_lab/face_contour.py`
-- [ ] Define `FACE_OVAL_INDICES: list[int]` — 36 ordered landmark indices from MediaPipe FACEMESH_FACE_OVAL, starting at forehead (10), walking clockwise
-- [ ] Implement `get_face_oval_polygon(landmarks: LandmarkResult) -> np.ndarray` — extracts Nx2 pixel coordinates for the face oval from the 478-point landmark array
-- [ ] Write tests in `tests/test_face_contour.py`: `TestFaceOvalIndices` (count is 36, all in 0-477 range, no duplicates) and `TestGetFaceOvalPolygon` (correct shape, dtype, coordinates within image bounds)
+- [x] Create `src/portrait_map_lab/face_contour.py`
+- [x] Define `FACE_OVAL_INDICES: list[int]` — 36 ordered landmark indices from MediaPipe FACEMESH_FACE_OVAL, starting at forehead (10), walking clockwise
+- [x] Implement `get_face_oval_polygon(landmarks: LandmarkResult) -> np.ndarray` — extracts Nx2 pixel coordinates for the face oval from the 478-point landmark array
+- [x] Write tests in `tests/test_face_contour.py`: `TestFaceOvalIndices` (count is 36, all in 0-477 range, no duplicates) and `TestGetFaceOvalPolygon` (correct shape, dtype, coordinates within image bounds)
 
 **Acceptance Criteria:**
-- `FACE_OVAL_INDICES` has exactly 36 unique indices, all in [0, 477]
-- `get_face_oval_polygon` returns `(36, 2)` float64 array with coordinates within image bounds
-- `pytest tests/test_face_contour.py::TestFaceOvalIndices tests/test_face_contour.py::TestGetFaceOvalPolygon` passes
+- `FACE_OVAL_INDICES` has exactly 36 unique indices, all in [0, 477] ✅
+- `get_face_oval_polygon` returns `(36, 2)` float64 array with coordinates within image bounds ✅
+- `pytest tests/test_face_contour.py::TestFaceOvalIndices tests/test_face_contour.py::TestGetFaceOvalPolygon` passes ✅
 
 ### 3.2 Contour and filled mask rasterization
 
-- [ ] Implement `rasterize_contour_mask(polygon: np.ndarray, image_shape: tuple[int, int], thickness: int = 1) -> np.ndarray` — draws closed polyline via `cv2.polylines`, returns uint8 mask (0/255)
-- [ ] Implement `rasterize_filled_mask(polygon: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray` — draws filled polygon via `cv2.fillPoly`, returns uint8 mask (0/255)
-- [ ] Write tests: `TestRasterizeContourMask` (dtype/shape, binary values, nonzero pixels, thin vs thick) and `TestRasterizeFilledMask` (dtype/shape, filled area larger than contour)
+- [x] Implement `rasterize_contour_mask(polygon: np.ndarray, image_shape: tuple[int, int], thickness: int = 1) -> np.ndarray` — draws closed polyline via `cv2.polylines`, returns uint8 mask (0/255)
+- [x] Implement `rasterize_filled_mask(polygon: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray` — draws filled polygon via `cv2.fillPoly`, returns uint8 mask (0/255)
+- [x] Write tests: `TestRasterizeContourMask` (dtype/shape, binary values, nonzero pixels, thin vs thick) and `TestRasterizeFilledMask` (dtype/shape, filled area larger than contour)
 
 **Acceptance Criteria:**
-- Both functions return uint8 arrays of correct shape with only 0/255 values
-- Contour mask with `thickness=1` has significantly fewer nonzero pixels than filled mask for the same polygon
-- `thickness=3` produces more nonzero pixels than `thickness=1`
-- `pytest tests/test_face_contour.py::TestRasterizeContourMask tests/test_face_contour.py::TestRasterizeFilledMask` passes
+- Both functions return uint8 arrays of correct shape with only 0/255 values ✅
+- Contour mask with `thickness=1` has significantly fewer nonzero pixels than filled mask for the same polygon ✅
+- `thickness=3` produces more nonzero pixels than `thickness=1` ✅
+- `pytest tests/test_face_contour.py::TestRasterizeContourMask tests/test_face_contour.py::TestRasterizeFilledMask` passes ✅
 
 ### 3.3 Signed distance computation
 
-- [ ] Implement `compute_signed_distance(contour_mask: np.ndarray, filled_mask: np.ndarray) -> np.ndarray` — computes EDT from contour mask via existing `compute_distance_field`, then applies sign: negative inside (where `filled_mask > 0`), positive outside, zero on contour. Ensure pixels where `contour_mask > 0` always get distance 0.0 regardless of filled mask classification.
-- [ ] Write tests: `TestComputeSignedDistance` (shape/dtype, zero on contour, negative inside, positive outside, magnitude increases from contour)
+- [x] Implement `compute_signed_distance(contour_mask: np.ndarray, filled_mask: np.ndarray) -> np.ndarray` — computes EDT from contour mask via existing `compute_distance_field`, then applies sign: negative inside (where `filled_mask > 0`), positive outside, zero on contour. Ensure pixels where `contour_mask > 0` always get distance 0.0 regardless of filled mask classification.
+- [x] Write tests: `TestComputeSignedDistance` (shape/dtype, zero on contour, negative inside, positive outside, magnitude increases from contour)
 
 **Acceptance Criteria:**
-- Output is float64, same shape as inputs
-- Pixels on the contour mask have distance ~0.0
-- Interior pixels (inside filled mask, not on contour) have negative values
-- Exterior pixels (outside filled mask, not on contour) have positive values
-- `abs(signed_distance)` increases moving away from contour in either direction
-- `pytest tests/test_face_contour.py::TestComputeSignedDistance` passes
+- Output is float64, same shape as inputs ✅
+- Pixels on the contour mask have distance ~0.0 ✅
+- Interior pixels (inside filled mask, not on contour) have negative values ✅
+- Exterior pixels (outside filled mask, not on contour) have positive values ✅
+- `abs(signed_distance)` increases moving away from contour in either direction ✅
+- `pytest tests/test_face_contour.py::TestComputeSignedDistance` passes ✅
 
 ### 3.4 Directional distance preparation
 
-- [ ] Implement `prepare_directional_distance(signed_distance: np.ndarray, mode: str = "inward", clamp_value: float = 9999.0, band_width: float | None = None) -> np.ndarray` — converts signed distance to unsigned distance based on direction mode: `"inward"` keeps interior distances and clamps exterior; `"outward"` keeps exterior and clamps interior; `"both"` uses `abs()` everywhere; `"band"` uses `abs()` clamped at `band_width`
-- [ ] Write tests: `TestPrepareDirectionalDistance` (inward clamps exterior, outward clamps interior, both is all positive, band clamps beyond width, raises on unknown mode)
+- [x] Implement `prepare_directional_distance(signed_distance: np.ndarray, mode: str = "inward", clamp_value: float = 9999.0, band_width: float | None = None) -> np.ndarray` — converts signed distance to unsigned distance based on direction mode: `"inward"` keeps interior distances and clamps exterior; `"outward"` keeps exterior and clamps interior; `"both"` uses `abs()` everywhere; `"band"` uses `abs()` clamped at `band_width`
+- [x] Write tests: `TestPrepareDirectionalDistance` (inward clamps exterior, outward clamps interior, both is all positive, band clamps beyond width, raises on unknown mode)
 
 **Acceptance Criteria:**
-- `"inward"` mode: exterior pixels get `clamp_value`, interior pixels get `abs(signed_distance)`
-- `"outward"` mode: interior pixels get `clamp_value`, exterior pixels get `abs(signed_distance)`
-- `"both"` mode: all values are `abs(signed_distance)`
-- `"band"` mode: values beyond `band_width` are clamped to `clamp_value`
-- Unknown mode raises `ValueError`
-- `pytest tests/test_face_contour.py::TestPrepareDirectionalDistance` passes
+- `"inward"` mode: exterior pixels get `clamp_value`, interior pixels get `abs(signed_distance)` ✅
+- `"outward"` mode: interior pixels get `clamp_value`, exterior pixels get `abs(signed_distance)` ✅
+- `"both"` mode: all values are `abs(signed_distance)` ✅
+- `"band"` mode: values beyond `band_width` are clamped to `clamp_value` ✅
+- Unknown mode raises `ValueError` ✅
+- `pytest tests/test_face_contour.py::TestPrepareDirectionalDistance` passes ✅
 
 ### 3.5 Module exports
 
-- [ ] Add `__all__` to `face_contour.py` listing all public names: `FACE_OVAL_INDICES`, `get_face_oval_polygon`, `rasterize_contour_mask`, `rasterize_filled_mask`, `compute_signed_distance`, `prepare_directional_distance`
+- [x] Add `__all__` to `face_contour.py` listing all public names: `FACE_OVAL_INDICES`, `get_face_oval_polygon`, `rasterize_contour_mask`, `rasterize_filled_mask`, `compute_signed_distance`, `prepare_directional_distance`
 
 **Acceptance Criteria:**
-- All public functions are importable via `from portrait_map_lab.face_contour import ...`
-- `ruff check src/portrait_map_lab/face_contour.py` passes
+- All public functions are importable via `from portrait_map_lab.face_contour import ...` ✅
+- `ruff check src/portrait_map_lab/face_contour.py` passes ✅
+
+**Implementation Notes:**
+- Successfully created the face_contour.py module with all required functions
+- Implemented comprehensive unit tests with 28 test cases covering all functions
+- All tests pass (28 passed in ~0.9s)
+- Code quality verified with ruff (linting and formatting)
+- The 36 face oval indices trace the face boundary clockwise from forehead
+- Functions are composable and work with existing infrastructure (compute_distance_field)
+- Ready for Phase 4: Pipeline and Visualization integration
 
 ---
 
