@@ -369,6 +369,38 @@ The `all` subcommand produces both subdirectories side by side.
 - Influence map emphasizes face boundary
 - Existing `features` pipeline output is unchanged
 
+**Implementation Notes:**
+- This phase requires manual visual verification that cannot be automated
+- All automated code implementation and testing is complete
+- The face contour distance map feature is fully implemented and ready for use
+- Manual verification steps documented above for user to perform:
+
+  1. **Test contour pipeline:**
+     ```bash
+     uv run python scripts/run_pipeline.py contour test_images/20230427-171404.JPG
+     ```
+     - Navigate to `output/20230427-171404/contour/` directory
+     - Verify `contour_overlay.png` shows cyan polyline tracing the face boundary (jaw and forehead)
+     - Verify `signed_distance_heatmap.png` uses RdBu diverging colormap (blue inside face, red outside)
+     - Verify `contour_influence.png` shows strongest values at the face boundary
+     - Verify `contact_sheet.png` contains all visualizations in a grid layout
+
+  2. **Test features pipeline (regression check):**
+     ```bash
+     uv run python scripts/run_pipeline.py features test_images/20230427-171404.JPG
+     ```
+     - Verify outputs in `output/20230427-171404/features/` directory are unchanged from before
+     - Existing eye/mouth feature pipeline should work exactly as before
+
+  3. **Test all subcommand:**
+     ```bash
+     uv run python scripts/run_pipeline.py all test_images/20230427-171404.JPG
+     ```
+     - Verify both `output/20230427-171404/contour/` and `output/20230427-171404/features/` directories are created
+     - Each should contain their respective pipeline outputs
+
+- The implementation guide is now complete with all 7 phases documented and all automated work finished
+
 ---
 
 ## Dependency Graph
