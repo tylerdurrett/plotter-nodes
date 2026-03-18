@@ -299,17 +299,19 @@ plotter-nodes/
 
 ### 5.1 Storage Utilities
 
-- [ ] Create `storage.py` with `from __future__ import annotations`
-- [ ] Implement `save_image(image: np.ndarray, path: str | Path) -> None`:
+- [x] Create `storage.py` with `from __future__ import annotations`
+- [x] Implement `save_image(image: np.ndarray, path: str | Path) -> None`:
   - Use `cv2.imwrite`, create parent dirs if needed
-- [ ] Implement `save_array(array: np.ndarray, path: str | Path) -> None`:
+- [x] Implement `save_array(array: np.ndarray, path: str | Path) -> None`:
   - Use `np.save`
-- [ ] Implement `load_image(path: str | Path) -> np.ndarray`:
+- [x] Implement `load_image(path: str | Path) -> np.ndarray`:
   - Use `cv2.imread`, raise `FileNotFoundError` if missing
   - Return BGR ndarray (OpenCV default)
-- [ ] Implement `ensure_output_dir(base: str | Path, image_name: str) -> Path`:
+- [x] Implement `ensure_output_dir(base: str | Path, image_name: str) -> Path`:
   - Create `<base>/<image_name>/` directory structure
   - Return the created path
+
+> **Note:** Implementation complete with all functions working as specified. Manual testing verified image round-trip, array preservation, directory creation, and proper error handling. Used pathlib.Path for robust path handling throughout. All acceptance criteria verified passing.
 
 **Acceptance Criteria:**
 - Images round-trip through save/load
