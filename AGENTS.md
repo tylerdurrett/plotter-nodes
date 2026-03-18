@@ -1,3 +1,7 @@
+## Project
+
+- Uses uv
+
 ## Important
 
 - Your knowledge is incomplete. Always check documentation and source code. Never make assumptions, always verify.
