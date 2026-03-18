@@ -294,21 +294,28 @@ def run_contour_pipeline(image: np.ndarray, config: ContourConfig | None = None)
     else:
         raise ValueError(f"Unknown contour method: {config.contour_method}")
 
-    # Step 2: Rasterize contour mask
+    # Step 2: Rasterize masks and compute SDF
     logger.info("Rasterizing contour mask...")
     contour_mask = rasterize_contour_mask(
         contour_polygon, image_shape, thickness=config.contour_thickness
     )
-
-    # Step 3: Rasterize filled mask
     logger.info("Rasterizing filled mask...")
     filled_mask = rasterize_filled_mask(contour_polygon, image_shape)
-
-    # Step 4: Compute signed distance field
     logger.info("Computing signed distance field...")
     signed_distance = compute_signed_distance(contour_mask, filled_mask)
 
-    # Step 5: Prepare directional distance
+    # Step 3: Optional smoothing — re-derive polygon/masks from smoothed SDF
+    if config.smooth_contour:
+        smooth_sigma = max(image_shape) * 0.01
+        logger.info("Smoothing contour (sigma=%.1f)...", smooth_sigma)
+        contour_polygon, contour_mask, filled_mask = derive_contour_from_sdf(
+            signed_distance, thickness=config.contour_thickness,
+            epsilon_factor=config.epsilon_factor, smooth_sigma=smooth_sigma,
+        )
+        # Recompute SDF from smoothed contour for consistency
+        signed_distance = compute_signed_distance(contour_mask, filled_mask)
+
+    # Step 4: Prepare directional distance
     logger.info("Preparing directional distance (mode: %s)...", config.direction)
     directional_distance = prepare_directional_distance(
         signed_distance, mode=config.direction, band_width=config.band_width
@@ -374,9 +381,11 @@ def _compute_average_contour(
     )
     sdf_head = compute_sdf_from_polygon(poly_head, image_shape, config.contour_thickness)
 
-    # Average and derive outputs — smooth SDF for rounder, more inclusive contours
+    # Average and derive outputs — clamp SDFs so no method dominates far from its boundary,
+    # then smooth for rounder, more inclusive contours
     logger.info("  Averaging and smoothing signed distance fields...")
-    signed_distance = average_signed_distances([sdf_lm, sdf_face, sdf_head])
+    sdf_clamp = max(image_shape) * 0.05
+    signed_distance = average_signed_distances([sdf_lm, sdf_face, sdf_head], clamp=sdf_clamp)
     # Smooth sigma scales with image size for consistent results across resolutions
     smooth_sigma = max(image_shape) * 0.01
     contour_polygon, contour_mask, filled_mask = derive_contour_from_sdf(
@@ -942,19 +951,25 @@ def _run_contour_pipeline_with_landmarks(
 
     image_shape = landmarks.image_shape
 
-    # Rasterize contour mask
+    # Rasterize masks and compute SDF
     logger.info("Rasterizing contour mask...")
     contour_mask = rasterize_contour_mask(
         contour_polygon, image_shape, thickness=config.contour_thickness
     )
-
-    # Rasterize filled mask
     logger.info("Rasterizing filled mask...")
     filled_mask = rasterize_filled_mask(contour_polygon, image_shape)
-
-    # Compute signed distance field
     logger.info("Computing signed distance field...")
     signed_distance = compute_signed_distance(contour_mask, filled_mask)
+
+    # Optional smoothing — re-derive polygon/masks from smoothed SDF
+    if config.smooth_contour:
+        smooth_sigma = max(image_shape) * 0.01
+        logger.info("Smoothing contour (sigma=%.1f)...", smooth_sigma)
+        contour_polygon, contour_mask, filled_mask = derive_contour_from_sdf(
+            signed_distance, thickness=config.contour_thickness,
+            epsilon_factor=config.epsilon_factor, smooth_sigma=smooth_sigma,
+        )
+        signed_distance = compute_signed_distance(contour_mask, filled_mask)
 
     # Prepare directional distance
     logger.info("Preparing directional distance (mode: %s)...", config.direction)

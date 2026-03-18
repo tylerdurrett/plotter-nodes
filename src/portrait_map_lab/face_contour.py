@@ -230,7 +230,9 @@ def compute_sdf_from_polygon(
     return compute_signed_distance(contour_mask, filled_mask)
 
 
-def average_signed_distances(sdfs: list[np.ndarray]) -> np.ndarray:
+def average_signed_distances(
+    sdfs: list[np.ndarray], clamp: float = 0.0
+) -> np.ndarray:
     """Compute the elementwise mean of multiple signed distance fields.
 
     Parameters
@@ -238,6 +240,11 @@ def average_signed_distances(sdfs: list[np.ndarray]) -> np.ndarray:
     sdfs
         List of signed distance fields, each (H, W) float64.
         All arrays must have the same shape.
+    clamp
+        If > 0, clip each SDF to [-clamp, +clamp] before averaging.
+        This prevents any single method from dominating far from its
+        own boundary. A good default is roughly the expected contour
+        thickness in pixels.
 
     Returns
     -------
@@ -257,9 +264,14 @@ def average_signed_distances(sdfs: list[np.ndarray]) -> np.ndarray:
             raise ValueError(
                 f"SDF shape mismatch: sdfs[0] is {shape}, sdfs[{i}] is {sdf.shape}"
             )
-    result = sdfs[0].astype(np.float64, copy=True)
-    for sdf in sdfs[1:]:
-        result += sdf
+    if clamp > 0:
+        result = np.clip(sdfs[0], -clamp, clamp).astype(np.float64)
+        for sdf in sdfs[1:]:
+            result += np.clip(sdf, -clamp, clamp)
+    else:
+        result = sdfs[0].astype(np.float64, copy=True)
+        for sdf in sdfs[1:]:
+            result += sdf
     result /= len(sdfs)
     return result
 

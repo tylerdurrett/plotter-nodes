@@ -168,6 +168,12 @@ def parse_args() -> argparse.Namespace:
         default=0.005,
         help="Contour simplification factor for segmentation methods (0 to disable)",
     )
+    contour_parser.add_argument(
+        "--no-smooth",
+        action="store_true",
+        default=False,
+        help="Disable contour smoothing (produces sharper, more angular contours)",
+    )
 
     # Density subcommand (density composition pipeline)
     density_parser = subparsers.add_parser(
@@ -351,6 +357,12 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.005,
         help="Contour simplification factor for segmentation methods (0 to disable)",
+    )
+    all_parser.add_argument(
+        "--no-smooth",
+        action="store_true",
+        default=False,
+        help="Disable contour smoothing (produces sharper, more angular contours)",
     )
     # Density arguments
     all_parser.add_argument(
@@ -590,6 +602,7 @@ def handle_contour(
         band_width=args.band_width,
         contour_thickness=args.contour_thickness,
         epsilon_factor=args.epsilon_factor,
+        smooth_contour=not args.no_smooth,
         output_dir=str(output_dir),
     )
 
@@ -889,6 +902,7 @@ def handle_all(
         band_width=args.band_width,
         contour_thickness=args.contour_thickness,
         epsilon_factor=args.epsilon_factor,
+        smooth_contour=not args.no_smooth,
         output_dir=str(base_output_dir / "contour"),
     )
 
