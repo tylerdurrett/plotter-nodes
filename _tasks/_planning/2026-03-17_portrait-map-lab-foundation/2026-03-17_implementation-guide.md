@@ -377,18 +377,20 @@ plotter-nodes/
 
 ### 6.2 CLI Script
 
-- [ ] Create `scripts/run_pipeline.py`:
+- [x] Create `scripts/run_pipeline.py`:
   - Accept image path as positional argument via `argparse`
   - Optional `--output-dir` flag (default: `"output"`)
   - Optional `--eye-weight`, `--mouth-weight`, `--curve`, `--radius` flags
   - Load image, build config from args, run pipeline, save outputs
   - Print summary of what was saved
-- [ ] Verify manually: `uv run python scripts/run_pipeline.py test_images/<image>.jpg` produces all expected output files
+- [x] Verify manually: `uv run python scripts/run_pipeline.py test_images/<image>.jpg` produces all expected output files
+
+> **Note:** Implementation complete with comprehensive CLI supporting all PipelineConfig and RemapConfig parameters. Added additional parameters beyond original spec: `--sigma`, `--tau`, `--clamp-distance` for full control over remapping curves. Script includes detailed output summary showing all created files and configuration used. Error handling provides helpful messages for common issues like missing files or no face detection. Tested with multiple images using both default and custom parameters. All 14 expected output files are created correctly in the specified directory structure.
 
 **Acceptance Criteria:**
-- `uv run python scripts/run_pipeline.py <image>` runs successfully and produces output directory with all files listed in feature description
-- `--help` shows available options
-- Custom flags override default config values
+- `uv run python scripts/run_pipeline.py <image>` runs successfully and produces output directory with all files listed in feature description ✓
+- `--help` shows available options ✓
+- Custom flags override default config values ✓
 
 ### 6.3 Package Exports & Final Cleanup
 
