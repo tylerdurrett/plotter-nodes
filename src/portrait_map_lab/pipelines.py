@@ -11,12 +11,19 @@ import numpy as np
 from portrait_map_lab.combine import combine_maps
 from portrait_map_lab.compose import build_density_target
 from portrait_map_lab.distance_fields import compute_distance_field
+from portrait_map_lab.etf import compute_etf
 from portrait_map_lab.face_contour import (
     compute_signed_distance,
     get_face_oval_polygon,
     prepare_directional_distance,
     rasterize_contour_mask,
     rasterize_filled_mask,
+)
+from portrait_map_lab.flow_fields import (
+    align_tangent_field,
+    blend_flow_fields,
+    compute_blend_weight,
+    compute_contour_flow,
 )
 from portrait_map_lab.landmarks import detect_landmarks
 from portrait_map_lab.luminance import compute_tonal_target
@@ -26,6 +33,8 @@ from portrait_map_lab.models import (
     ContourConfig,
     ContourResult,
     DensityResult,
+    FlowConfig,
+    FlowResult,
     PipelineConfig,
     PipelineResult,
 )
@@ -524,3 +533,154 @@ def save_density_outputs(
     save_image(contact_sheet, density_dir / "contact_sheet.png")
 
     logger.info("All density outputs saved successfully")
+
+
+def run_flow_pipeline(
+    image: np.ndarray,
+    contour_result: ContourResult,
+    config: FlowConfig | None = None,
+) -> FlowResult:
+    """Run the flow field computation pipeline.
+
+    Combines Edge Tangent Fields (ETF) from image gradients with contour-based
+    flow to create a blended flow field for particle trajectory guidance.
+
+    Parameters
+    ----------
+    image
+        BGR uint8 image array (as loaded by cv2.imread).
+    contour_result
+        Pre-computed contour pipeline result containing signed distance field.
+    config
+        Configuration for flow field computation. If None, uses default configuration.
+
+    Returns
+    -------
+    FlowResult
+        Complete flow pipeline result with ETF, contour flow, blend weights,
+        and final blended flow field.
+
+    Raises
+    ------
+    ValueError
+        If input arrays have mismatched shapes.
+    """
+    if config is None:
+        config = FlowConfig()
+
+    logger.info("Starting flow field pipeline...")
+
+    # Step 1: Compute Edge Tangent Field (ETF)
+    logger.info("Computing Edge Tangent Field...")
+    etf_result = compute_etf(image, config.etf)
+
+    # Step 2: Compute contour flow from signed distance field
+    logger.info("Computing contour flow from signed distance field...")
+    contour_flow_x, contour_flow_y = compute_contour_flow(
+        contour_result.signed_distance,
+        smooth_sigma=config.contour_smooth_sigma,
+    )
+
+    # Step 3: Align ETF to contour flow to resolve 180° ambiguity
+    logger.info("Aligning ETF tangent field to contour flow...")
+    aligned_tx, aligned_ty = align_tangent_field(
+        etf_result.tangent_x,
+        etf_result.tangent_y,
+        contour_flow_x,
+        contour_flow_y,
+    )
+
+    # Step 4: Compute coherence-based blend weights
+    logger.info("Computing blend weights from coherence (power=%.1f)...", config.coherence_power)
+    blend_weight = compute_blend_weight(etf_result.coherence, config)
+
+    # Step 5: Blend ETF and contour flow
+    logger.info("Blending flow fields (mode: %s, threshold: %.2f)...",
+                config.blend_mode, config.fallback_threshold)
+    flow_x, flow_y = blend_flow_fields(
+        aligned_tx,
+        aligned_ty,
+        contour_flow_x,
+        contour_flow_y,
+        blend_weight,
+        fallback_threshold=config.fallback_threshold,
+    )
+
+    logger.info("Flow field pipeline completed successfully")
+
+    return FlowResult(
+        etf=etf_result,
+        contour_flow_x=contour_flow_x,
+        contour_flow_y=contour_flow_y,
+        blend_weight=blend_weight,
+        flow_x=flow_x,
+        flow_y=flow_y,
+    )
+
+
+def save_flow_outputs(
+    result: FlowResult,
+    output_dir: Path,
+    image: np.ndarray | None = None,
+) -> None:
+    """Save all flow pipeline outputs to the specified directory.
+
+    Creates the following output structure:
+    ```
+    output_dir/flow/
+        etf_coherence.png
+        etf_quiver.png  (deferred to Phase 5)
+        contour_flow_quiver.png  (deferred to Phase 5)
+        blend_weight.png
+        flow_lic.png  (deferred to Phase 5)
+        flow_lic_overlay.png  (deferred to Phase 5)
+        flow_quiver.png  (deferred to Phase 5)
+        flow_x_raw.npy
+        flow_y_raw.npy
+        contact_sheet.png
+    ```
+
+    Parameters
+    ----------
+    result
+        Complete flow pipeline result to save.
+    output_dir
+        Directory to save outputs to (will be created if needed).
+    image
+        Original input image for the contact sheet. Optional.
+    """
+    # Create flow subdirectory
+    flow_dir = Path(output_dir) / "flow"
+    flow_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Saving flow outputs to %s", flow_dir)
+
+    # Save ETF coherence heatmap
+    coherence_img = colorize_map(result.etf.coherence, colormap="viridis")
+    save_image(coherence_img, flow_dir / "etf_coherence.png")
+
+    # Save blend weight heatmap
+    weight_img = colorize_map(result.blend_weight, colormap="viridis")
+    save_image(weight_img, flow_dir / "blend_weight.png")
+
+    # Save raw flow field arrays for downstream use
+    save_array(result.flow_x, flow_dir / "flow_x_raw.npy")
+    save_array(result.flow_y, flow_dir / "flow_y_raw.npy")
+
+    # Build contact sheet (quiver and LIC overlays deferred to Phase 5)
+    contact_images = {}
+    if image is not None:
+        contact_images["Original"] = image
+
+    contact_images["ETF Coherence"] = coherence_img
+    contact_images["Blend Weight"] = weight_img
+
+    # For now, visualize flow magnitude as placeholder
+    flow_magnitude = np.sqrt(result.flow_x**2 + result.flow_y**2)
+    flow_mag_img = colorize_map(flow_magnitude, colormap="hot")
+    contact_images["Flow Magnitude"] = flow_mag_img
+
+    contact_sheet = make_contact_sheet(contact_images, columns=3)
+    save_image(contact_sheet, flow_dir / "contact_sheet.png")
+
+    logger.info("All flow outputs saved successfully")

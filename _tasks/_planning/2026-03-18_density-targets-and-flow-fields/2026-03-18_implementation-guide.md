@@ -288,64 +288,76 @@ output/<image>/
 
 ---
 
-## Phase 4: Flow Fields
+## Phase 4: Flow Fields ✅ COMPLETE
 
 **Purpose:** Implement contour gradient flow, ETF alignment, coherence-based blending, and the flow pipeline.
 
 **Rationale:** This phase depends on the ETF from Phase 3 and the contour signed distance field from Stage 1. It combines them into the final blended flow field, completing Stage 3's core processing.
 
-### 4.1 Implement `flow_fields.py`
+**Implementation Notes:**
+- Successfully created `src/portrait_map_lab/flow_fields.py` with all 4 required functions
+- Implemented contour flow computation using numpy gradient with 90° CCW rotation
+- Added tangent field alignment using dot product to resolve 180° ambiguity
+- Created coherence-based blend weight computation with power function
+- Implemented linear blending with fallback mechanism for degenerate cases
+- Added comprehensive pipeline integration in pipelines.py with logging
+- Created 16 unit tests for flow_fields.py, all passing
+- Added 6 integration tests to test_pipelines.py, all passing
+- Fixed minor linting issues (newlines, unused import)
+- Tested end-to-end with real portrait image, produces expected outputs
 
-- [ ] Create `src/portrait_map_lab/flow_fields.py` with `__all__`
-- [ ] Implement `compute_contour_flow(signed_distance: np.ndarray, smooth_sigma: float = 1.0) -> tuple[np.ndarray, np.ndarray]`
+### 4.1 Implement `flow_fields.py` ✅
+
+- [x] Create `src/portrait_map_lab/flow_fields.py` with `__all__`
+- [x] Implement `compute_contour_flow(signed_distance: np.ndarray, smooth_sigma: float = 1.0) -> tuple[np.ndarray, np.ndarray]`
   - `grad_y, grad_x = np.gradient(signed_distance)`
   - Rotate 90° CCW: `flow_x = -grad_y`, `flow_y = grad_x`
   - Normalize to unit vectors
   - Optional Gaussian smoothing + re-normalize
   - Return `(flow_x, flow_y)`
-- [ ] Implement `align_tangent_field(tx, ty, ref_x, ref_y) -> tuple[np.ndarray, np.ndarray]`
+- [x] Implement `align_tangent_field(tx, ty, ref_x, ref_y) -> tuple[np.ndarray, np.ndarray]`
   - Compute dot product: `dot = tx * ref_x + ty * ref_y`
   - Flip where `dot < 0`: `tx = where(dot < 0, -tx, tx)`, same for ty
   - Return aligned `(tx, ty)`
-- [ ] Implement `compute_blend_weight(coherence: np.ndarray, config: FlowConfig | None = None) -> np.ndarray`
+- [x] Implement `compute_blend_weight(coherence: np.ndarray, config: FlowConfig | None = None) -> np.ndarray`
   - `alpha = coherence ** config.coherence_power`
   - Clip to [0, 1]
   - Return alpha
-- [ ] Implement `blend_flow_fields(etf_tx, etf_ty, contour_fx, contour_fy, alpha, fallback_threshold) -> tuple[np.ndarray, np.ndarray]`
+- [x] Implement `blend_flow_fields(etf_tx, etf_ty, contour_fx, contour_fy, alpha, fallback_threshold) -> tuple[np.ndarray, np.ndarray]`
   - Linear blend: `bx = alpha * etf_tx + (1 - alpha) * contour_fx`
   - Pre-normalization magnitude check: where `sqrt(bx² + by²) < fallback_threshold`, use contour flow
   - Normalize to unit vectors
   - Return `(flow_x, flow_y)`
 
-**Acceptance Criteria:**
-- Contour flow vectors are unit length and perpendicular to the distance gradient
-- Alignment flips exactly where dot product is negative
-- Blend fallback triggers in degenerate regions
-- All output vectors are unit length
+**Acceptance Criteria:** ✅ All met
+- Contour flow vectors are unit length and perpendicular to the distance gradient ✅
+- Alignment flips exactly where dot product is negative ✅
+- Blend fallback triggers in degenerate regions ✅
+- All output vectors are unit length ✅
 
-### 4.2 Flow pipeline integration
+### 4.2 Flow pipeline integration ✅
 
-- [ ] Add `run_flow_pipeline(image: np.ndarray, contour_result: ContourResult, config: FlowConfig | None = None) -> FlowResult` to `pipelines.py`
+- [x] Add `run_flow_pipeline(image: np.ndarray, contour_result: ContourResult, config: FlowConfig | None = None) -> FlowResult` to `pipelines.py`
   - Compute ETF via `compute_etf`
   - Compute contour flow from `contour_result.signed_distance`
   - Align ETF to contour flow
   - Compute blend weight from coherence
   - Blend flow fields
   - Return `FlowResult` with all components
-- [ ] Add `save_flow_outputs(result: FlowResult, output_dir: Path, image: np.ndarray | None = None) -> None` to `pipelines.py`
+- [x] Add `save_flow_outputs(result: FlowResult, output_dir: Path, image: np.ndarray | None = None) -> None` to `pipelines.py`
   - Save coherence heatmap (viridis)
   - Save blend weight heatmap (viridis)
   - Save raw .npy arrays for flow_x, flow_y
   - Contact sheet (defer quiver and LIC overlays to Phase 5)
 
-**Acceptance Criteria:**
-- `run_flow_pipeline` accepts pre-computed contour result
-- FlowResult contains all expected fields
-- Raw .npy flow arrays saved for downstream use
+**Acceptance Criteria:** ✅ All met
+- `run_flow_pipeline` accepts pre-computed contour result ✅
+- FlowResult contains all expected fields ✅
+- Raw .npy flow arrays saved for downstream use ✅
 
-### 4.3 Flow fields tests
+### 4.3 Flow fields tests ✅
 
-- [ ] Write `tests/test_flow_fields.py`:
+- [x] Write `tests/test_flow_fields.py`:
   - `test_contour_flow_unit_length`: output is unit vectors on synthetic distance field
   - `test_contour_flow_perpendicular`: flow is perpendicular to distance gradient (dot product ≈ 0)
   - `test_alignment_flips_opposing_vectors`: synthetic test where half the field is opposing → those get flipped
@@ -355,14 +367,14 @@ output/<image>/
   - `test_blend_low_coherence_prefers_contour`: alpha near 0.0 → result close to contour flow
   - `test_blend_fallback_on_cancellation`: opposing vectors with alpha=0.5 → falls back to contour flow
   - `test_blended_unit_length`: final blended vectors are unit length
-- [ ] Extend `tests/test_pipelines.py` with flow pipeline integration test:
+- [x] Extend `tests/test_pipelines.py` with flow pipeline integration test:
   - Returns correct type
   - All array shapes match image dimensions
   - Flow vectors unit length
 
-**Acceptance Criteria:**
-- All tests pass
-- Perpendicularity test passes within tolerance (|dot| < 0.05)
+**Acceptance Criteria:** ✅ All met
+- All tests pass ✅ (22 tests total: 16 unit + 6 integration)
+- Perpendicularity test passes within tolerance (|dot| < 0.05) ✅
 
 ---
 

@@ -11,6 +11,8 @@ import pytest
 from portrait_map_lab.models import (
     ComposeConfig,
     DensityResult,
+    FlowConfig,
+    FlowResult,
     LuminanceConfig,
     PipelineConfig,
     PipelineResult,
@@ -20,7 +22,9 @@ from portrait_map_lab.pipelines import (
     run_contour_pipeline,
     run_density_pipeline,
     run_feature_distance_pipeline,
+    run_flow_pipeline,
     save_density_outputs,
+    save_flow_outputs,
     save_pipeline_outputs,
 )
 
@@ -396,3 +400,121 @@ def test_save_density_outputs_without_image(test_image):
         density_dir = output_dir / "density"
         assert density_dir.exists()
         assert (density_dir / "contact_sheet.png").exists()
+
+
+def test_flow_pipeline_returns_complete_result(test_image):
+    """Test that flow pipeline returns a FlowResult with all fields populated."""
+    # First need a contour result
+    contour_result = run_contour_pipeline(test_image)
+
+    # Run flow pipeline
+    result = run_flow_pipeline(test_image, contour_result)
+
+    assert isinstance(result, FlowResult)
+    assert result.etf is not None
+    assert result.contour_flow_x is not None
+    assert result.contour_flow_y is not None
+    assert result.blend_weight is not None
+    assert result.flow_x is not None
+    assert result.flow_y is not None
+
+
+def test_flow_pipeline_array_shapes(test_image):
+    """Test that all flow arrays have matching shapes."""
+    h, w = test_image.shape[:2]
+
+    # Get contour result first
+    contour_result = run_contour_pipeline(test_image)
+
+    # Run flow pipeline
+    result = run_flow_pipeline(test_image, contour_result)
+
+    # All arrays should match image dimensions
+    assert result.etf.tangent_x.shape == (h, w)
+    assert result.etf.tangent_y.shape == (h, w)
+    assert result.etf.coherence.shape == (h, w)
+    assert result.contour_flow_x.shape == (h, w)
+    assert result.contour_flow_y.shape == (h, w)
+    assert result.blend_weight.shape == (h, w)
+    assert result.flow_x.shape == (h, w)
+    assert result.flow_y.shape == (h, w)
+
+
+def test_flow_pipeline_unit_vectors(test_image):
+    """Test that flow vectors are unit length."""
+    contour_result = run_contour_pipeline(test_image)
+    result = run_flow_pipeline(test_image, contour_result)
+
+    # Check ETF vectors
+    etf_mag = np.sqrt(result.etf.tangent_x**2 + result.etf.tangent_y**2)
+    assert np.allclose(etf_mag, 1.0, atol=1e-6)
+
+    # Check contour flow vectors
+    contour_mag = np.sqrt(result.contour_flow_x**2 + result.contour_flow_y**2)
+    assert np.allclose(contour_mag, 1.0, atol=1e-6)
+
+    # Check final flow vectors
+    flow_mag = np.sqrt(result.flow_x**2 + result.flow_y**2)
+    assert np.allclose(flow_mag, 1.0, atol=1e-6)
+
+
+def test_flow_pipeline_with_config(test_image):
+    """Test flow pipeline with custom configuration."""
+    contour_result = run_contour_pipeline(test_image)
+
+    config = FlowConfig(
+        contour_smooth_sigma=2.0,
+        coherence_power=3.0,
+        fallback_threshold=0.2,
+    )
+
+    result = run_flow_pipeline(test_image, contour_result, config)
+
+    assert isinstance(result, FlowResult)
+    # Result should be complete
+    assert result.flow_x is not None
+    assert result.flow_y is not None
+
+
+def test_save_flow_outputs(test_image):
+    """Test saving flow pipeline outputs."""
+    contour_result = run_contour_pipeline(test_image)
+    result = run_flow_pipeline(test_image, contour_result)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir) / "test_output"
+        save_flow_outputs(result, output_dir, image=test_image)
+
+        # Check that files were created
+        flow_dir = output_dir / "flow"
+        assert flow_dir.exists()
+        assert (flow_dir / "etf_coherence.png").exists()
+        assert (flow_dir / "blend_weight.png").exists()
+        assert (flow_dir / "flow_x_raw.npy").exists()
+        assert (flow_dir / "flow_y_raw.npy").exists()
+        assert (flow_dir / "contact_sheet.png").exists()
+
+        # Load and check saved arrays
+        flow_x = np.load(flow_dir / "flow_x_raw.npy")
+        flow_y = np.load(flow_dir / "flow_y_raw.npy")
+
+        assert flow_x.shape == result.flow_x.shape
+        assert flow_y.shape == result.flow_y.shape
+        assert np.allclose(flow_x, result.flow_x)
+        assert np.allclose(flow_y, result.flow_y)
+
+
+def test_save_flow_outputs_without_image(test_image):
+    """Test saving flow outputs without providing original image."""
+    contour_result = run_contour_pipeline(test_image)
+    result = run_flow_pipeline(test_image, contour_result)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir) / "test_output"
+        # Save without providing image
+        save_flow_outputs(result, output_dir, image=None)
+
+        # Should still create outputs
+        flow_dir = output_dir / "flow"
+        assert flow_dir.exists()
+        assert (flow_dir / "contact_sheet.png").exists()
