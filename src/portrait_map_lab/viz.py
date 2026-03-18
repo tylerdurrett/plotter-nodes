@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import cv2
+import matplotlib
 import numpy as np
-from matplotlib import cm
 
 from portrait_map_lab.models import LandmarkResult
 
@@ -56,7 +56,7 @@ def colorize_map(array: np.ndarray, colormap: str = "inferno") -> np.ndarray:
     array_norm = np.clip(array, 0, 1)
 
     # Get colormap and apply
-    cmap = cm.get_cmap(colormap)
+    cmap = matplotlib.colormaps[colormap]
     rgba = cmap(array_norm)  # Returns RGBA in [0, 1]
 
     # Convert RGBA to RGB, then to BGR for OpenCV

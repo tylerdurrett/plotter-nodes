@@ -394,18 +394,20 @@ plotter-nodes/
 
 ### 6.3 Package Exports & Final Cleanup
 
-- [ ] Update `src/portrait_map_lab/__init__.py`:
+- [x] Update `src/portrait_map_lab/__init__.py`:
   - Import and re-export primary public functions and classes
   - Define `__all__`
-- [ ] Verify `ruff check src/ tests/` and `ruff format --check src/ tests/` pass clean
-- [ ] Run full test suite: `uv run pytest` — all tests pass
-- [ ] Verify `uv pip install -e .` installs cleanly in a fresh venv
+- [x] Verify `ruff check src/ tests/` and `ruff format --check src/ tests/` pass clean
+- [x] Run full test suite: `uv run pytest` — all tests pass
+- [x] Verify `uv pip install -e .` installs cleanly in a fresh venv
+
+> **Note:** Implementation complete. All 21 public API items exported via `__all__` including main pipeline functions, data models, processing functions, storage utilities, visualization tools, and constants. Fixed matplotlib deprecation warning by updating `viz.py` to use `matplotlib.colormaps[name]` instead of deprecated `cm.get_cmap()`. All 71 tests pass with no warnings. Package imports verified working correctly.
 
 **Acceptance Criteria:**
-- `from portrait_map_lab import run_feature_distance_pipeline, PipelineConfig` works
-- All linting and formatting checks pass
-- Full test suite passes
-- Package installs cleanly
+- `from portrait_map_lab import run_feature_distance_pipeline, PipelineConfig` works ✓
+- All linting and formatting checks pass ✓
+- Full test suite passes ✓ (71 tests)
+- Package installs cleanly ✓
 
 ---
 
