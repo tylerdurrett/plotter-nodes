@@ -31,11 +31,14 @@ from portrait_map_lab.luminance import compute_tonal_target
 from portrait_map_lab.masks import build_region_masks
 from portrait_map_lab.models import (
     ComposeConfig,
+    ComposedResult,
     ContourConfig,
     ContourResult,
     DensityResult,
     FlowConfig,
     FlowResult,
+    LandmarkResult,
+    LICConfig,
     PipelineConfig,
     PipelineResult,
 )
@@ -743,3 +746,255 @@ def save_flow_outputs(
     save_image(contact_sheet, flow_dir / "contact_sheet.png")
 
     logger.info("All flow outputs saved successfully")
+
+
+def _run_feature_pipeline_with_landmarks(
+    landmarks: LandmarkResult,
+    config: PipelineConfig | None = None,
+) -> PipelineResult:
+    """Run feature pipeline with pre-computed landmarks.
+
+    Internal helper to avoid duplicate landmark detection.
+    """
+    if config is None:
+        config = PipelineConfig()
+
+    # Build region masks
+    logger.info("Building region masks...")
+    masks = build_region_masks(landmarks, config.regions)
+
+    # Compute distance fields
+    logger.info("Computing distance fields...")
+    distance_fields = {}
+
+    if "combined_eyes" in masks:
+        distance_fields["eyes"] = compute_distance_field(masks["combined_eyes"])
+    else:
+        # Fallback: if no combined_eyes, try to use left_eye or right_eye
+        if "left_eye" in masks:
+            distance_fields["eyes"] = compute_distance_field(masks["left_eye"])
+        elif "right_eye" in masks:
+            distance_fields["eyes"] = compute_distance_field(masks["right_eye"])
+        else:
+            logger.warning("No eye masks found, creating empty distance field")
+            distance_fields["eyes"] = (
+                np.ones_like(masks.get("mouth", np.zeros(landmarks.image_shape)), dtype=np.float64)
+                * 1000.0
+            )
+
+    if "mouth" in masks:
+        distance_fields["mouth"] = compute_distance_field(masks["mouth"])
+    else:
+        logger.warning("No mouth mask found, creating empty distance field")
+        distance_fields["mouth"] = np.ones(landmarks.image_shape, dtype=np.float64) * 1000.0
+
+    # Remap distance fields to influence maps
+    logger.info("Remapping distance fields to influence maps...")
+    influence_maps = {}
+    for name, field in distance_fields.items():
+        influence_maps[name] = remap_influence(field, config.remap)
+
+    # Combine influence maps with weights
+    logger.info("Combining influence maps...")
+    combined = combine_maps(influence_maps, config.weights)
+
+    return PipelineResult(
+        landmarks=landmarks,
+        masks=masks,
+        distance_fields=distance_fields,
+        influence_maps=influence_maps,
+        combined=combined,
+    )
+
+
+def _run_contour_pipeline_with_landmarks(
+    landmarks: LandmarkResult,
+    config: ContourConfig | None = None,
+) -> ContourResult:
+    """Run contour pipeline with pre-computed landmarks.
+
+    Internal helper to avoid duplicate landmark detection.
+    """
+    if config is None:
+        config = ContourConfig()
+
+    # Extract face oval polygon
+    logger.info("Extracting face oval polygon...")
+    contour_polygon = get_face_oval_polygon(landmarks)
+
+    # Rasterize contour mask
+    logger.info("Rasterizing contour mask...")
+    contour_mask = rasterize_contour_mask(
+        contour_polygon, landmarks.image_shape, thickness=config.contour_thickness
+    )
+
+    # Rasterize filled mask
+    logger.info("Rasterizing filled mask...")
+    filled_mask = rasterize_filled_mask(contour_polygon, landmarks.image_shape)
+
+    # Compute signed distance field
+    logger.info("Computing signed distance field...")
+    signed_distance = compute_signed_distance(contour_mask, filled_mask)
+
+    # Prepare directional distance
+    logger.info("Preparing directional distance (mode: %s)...", config.direction)
+    directional_distance = prepare_directional_distance(
+        signed_distance, mode=config.direction, band_width=config.band_width
+    )
+
+    # Remap to influence map
+    logger.info("Remapping distance to influence...")
+    influence_map = remap_influence(directional_distance, config.remap)
+
+    return ContourResult(
+        landmarks=landmarks,
+        contour_polygon=contour_polygon,
+        contour_mask=contour_mask,
+        filled_mask=filled_mask,
+        signed_distance=signed_distance,
+        directional_distance=directional_distance,
+        influence_map=influence_map,
+    )
+
+
+def run_all_pipelines(
+    image: np.ndarray,
+    feature_config: PipelineConfig | None = None,
+    contour_config: ContourConfig | None = None,
+    compose_config: ComposeConfig | None = None,
+    flow_config: FlowConfig | None = None,
+    lic_config: LICConfig | None = None,
+) -> ComposedResult:
+    """Run all pipelines in sequence, sharing landmarks for efficiency.
+
+    This is the main entry point for the complete portrait processing workflow.
+    Landmarks are detected once and shared across all pipeline stages.
+
+    Parameters
+    ----------
+    image
+        BGR uint8 image array (as loaded by cv2.imread).
+    feature_config
+        Configuration for feature distance pipeline. If None, uses defaults.
+    contour_config
+        Configuration for contour pipeline. If None, uses defaults.
+    compose_config
+        Configuration for density composition. If None, uses defaults.
+    flow_config
+        Configuration for flow field computation. If None, uses defaults.
+    lic_config
+        Configuration for LIC visualization. If None, uses defaults.
+
+    Returns
+    -------
+    ComposedResult
+        Complete pipeline result containing all intermediate results:
+        - feature_result: Feature distance pipeline results
+        - contour_result: Contour pipeline results
+        - density_result: Density composition results
+        - flow_result: Flow field computation results
+        - lic_image: Line Integral Convolution visualization
+
+    Raises
+    ------
+    ValueError
+        If no face is detected in the image.
+    """
+    logger.info("Starting complete pipeline processing...")
+
+    # Step 1: Detect landmarks once for all pipelines
+    logger.info("Detecting face landmarks (shared across all pipelines)...")
+    landmarks = detect_landmarks(image)
+    logger.info("Landmarks detected with confidence: %.2f%%", landmarks.confidence * 100)
+
+    # Step 2: Run feature pipeline with shared landmarks
+    logger.info("\n--- Stage 1: Feature Distance Pipeline ---")
+    feature_result = _run_feature_pipeline_with_landmarks(landmarks, feature_config)
+    logger.info("Feature pipeline completed")
+
+    # Step 3: Run contour pipeline with shared landmarks
+    logger.info("\n--- Stage 2: Contour Pipeline ---")
+    contour_result = _run_contour_pipeline_with_landmarks(landmarks, contour_config)
+    logger.info("Contour pipeline completed")
+
+    # Step 4: Run density pipeline using results from features and contour
+    logger.info("\n--- Stage 3: Density Composition Pipeline ---")
+    density_result = run_density_pipeline(
+        image, feature_result, contour_result, compose_config
+    )
+    logger.info("Density pipeline completed")
+
+    # Step 5: Run flow pipeline using contour result
+    logger.info("\n--- Stage 4: Flow Field Pipeline ---")
+    flow_result = run_flow_pipeline(image, contour_result, flow_config)
+    logger.info("Flow pipeline completed")
+
+    # Step 6: Compute LIC visualization from flow field
+    logger.info("\n--- Stage 5: LIC Visualization ---")
+    logger.info("Computing Line Integral Convolution...")
+    lic_image = compute_lic(flow_result.flow_x, flow_result.flow_y, lic_config)
+    logger.info("LIC visualization completed")
+
+    logger.info("\n=== All pipelines completed successfully ===")
+
+    # Create and return composed result
+    return ComposedResult(
+        feature_result=feature_result,
+        contour_result=contour_result,
+        density_result=density_result,
+        flow_result=flow_result,
+        lic_image=lic_image,
+    )
+
+
+def save_all_outputs(
+    result: ComposedResult,
+    output_dir: Path,
+    image: np.ndarray,
+) -> None:
+    """Save all pipeline outputs to their respective subdirectories.
+
+    Creates the following directory structure:
+    ```
+    output_dir/
+        features/
+            landmarks.png, masks, distance fields, influence maps, etc.
+        contour/
+            contour overlay, masks, distance fields, influence map, etc.
+        density/
+            luminance, CLAHE, tonal target, importance, density target, etc.
+        flow/
+            ETF coherence, flow fields, LIC visualization, etc.
+    ```
+
+    Parameters
+    ----------
+    result
+        Complete composed pipeline result to save.
+    output_dir
+        Base directory to save outputs (subdirectories will be created).
+    image
+        Original input image for visualizations.
+    """
+    output_dir = Path(output_dir)
+    logger.info("Saving all pipeline outputs to %s", output_dir)
+
+    # Save feature pipeline outputs
+    features_dir = output_dir / "features"
+    logger.info("Saving feature outputs to %s", features_dir)
+    save_pipeline_outputs(result.feature_result, image, features_dir)
+
+    # Save contour pipeline outputs
+    contour_dir = output_dir / "contour"
+    logger.info("Saving contour outputs to %s", contour_dir)
+    save_contour_outputs(result.contour_result, image, contour_dir)
+
+    # Save density pipeline outputs
+    logger.info("Saving density outputs...")
+    save_density_outputs(result.density_result, output_dir, image)
+
+    # Save flow pipeline outputs
+    logger.info("Saving flow outputs...")
+    save_flow_outputs(result.flow_result, output_dir, image)
+
+    logger.info("All outputs saved successfully to %s", output_dir)

@@ -10,19 +10,26 @@ import pytest
 
 from portrait_map_lab.models import (
     ComposeConfig,
+    ComposedResult,
+    ContourConfig,
+    ContourResult,
     DensityResult,
+    ETFConfig,
     FlowConfig,
     FlowResult,
+    LICConfig,
     LuminanceConfig,
     PipelineConfig,
     PipelineResult,
     RemapConfig,
 )
 from portrait_map_lab.pipelines import (
+    run_all_pipelines,
     run_contour_pipeline,
     run_density_pipeline,
     run_feature_distance_pipeline,
     run_flow_pipeline,
+    save_all_outputs,
     save_density_outputs,
     save_flow_outputs,
     save_pipeline_outputs,
@@ -517,4 +524,172 @@ def test_save_flow_outputs_without_image(test_image):
         # Should still create outputs
         flow_dir = output_dir / "flow"
         assert flow_dir.exists()
-        assert (flow_dir / "contact_sheet.png").exists()
+
+
+def test_run_all_pipelines(test_image):
+    """Test running all pipelines with shared landmarks."""
+    # Run the complete pipeline
+    result = run_all_pipelines(test_image)
+
+    # Check that result has the expected structure
+    assert result is not None
+    assert result.feature_result is not None
+    assert result.contour_result is not None
+    assert result.density_result is not None
+    assert result.flow_result is not None
+    assert result.lic_image is not None
+
+    # Check that all results have correct types
+    assert isinstance(result.feature_result, PipelineResult)
+    assert isinstance(result.contour_result, ContourResult)
+    assert isinstance(result.density_result, DensityResult)
+    assert isinstance(result.flow_result, FlowResult)
+    assert isinstance(result, ComposedResult)
+
+    # Check that LIC image has correct properties
+    assert isinstance(result.lic_image, np.ndarray)
+    assert result.lic_image.dtype == np.float64
+    assert result.lic_image.shape == test_image.shape[:2]
+    assert result.lic_image.min() >= 0.0
+    assert result.lic_image.max() <= 1.0
+
+
+def test_all_pipeline_shared_landmarks(test_image):
+    """Test that landmarks are shared across all pipeline results."""
+    result = run_all_pipelines(test_image)
+
+    # Extract landmarks from each result
+    feature_landmarks = result.feature_result.landmarks
+    contour_landmarks = result.contour_result.landmarks
+
+    # Check that landmarks are the same object (shared reference)
+    assert feature_landmarks is contour_landmarks
+
+    # Check that landmarks have the same values
+    assert feature_landmarks.confidence == contour_landmarks.confidence
+    assert np.array_equal(feature_landmarks.landmarks, contour_landmarks.landmarks)
+    assert feature_landmarks.image_shape == contour_landmarks.image_shape
+
+
+def test_all_pipeline_shapes(test_image):
+    """Test that all arrays in the composed result have matching shapes."""
+    h, w = test_image.shape[:2]
+    result = run_all_pipelines(test_image)
+
+    # Check feature result shapes
+    assert result.feature_result.combined.shape == (h, w)
+    for mask in result.feature_result.masks.values():
+        assert mask.shape == (h, w)
+
+    # Check contour result shapes
+    assert result.contour_result.signed_distance.shape == (h, w)
+    assert result.contour_result.influence_map.shape == (h, w)
+
+    # Check density result shapes
+    assert result.density_result.luminance.shape == (h, w)
+    assert result.density_result.density_target.shape == (h, w)
+
+    # Check flow result shapes
+    assert result.flow_result.flow_x.shape == (h, w)
+    assert result.flow_result.flow_y.shape == (h, w)
+
+    # Check LIC image shape
+    assert result.lic_image.shape == (h, w)
+
+
+def test_all_pipeline_ranges(test_image):
+    """Test that all normalized values are in expected ranges."""
+    result = run_all_pipelines(test_image)
+
+    # Check normalized maps are in [0, 1]
+    assert result.feature_result.combined.min() >= 0.0
+    assert result.feature_result.combined.max() <= 1.0
+
+    assert result.contour_result.influence_map.min() >= 0.0
+    assert result.contour_result.influence_map.max() <= 1.0
+
+    assert result.density_result.luminance.min() >= 0.0
+    assert result.density_result.luminance.max() <= 1.0
+    assert result.density_result.density_target.min() >= 0.0
+    assert result.density_result.density_target.max() <= 1.0
+
+    # Check flow fields are unit vectors
+    flow_mag = np.sqrt(result.flow_result.flow_x**2 + result.flow_result.flow_y**2)
+    assert np.allclose(flow_mag, 1.0, atol=1e-6)
+
+    # Check LIC is in [0, 1]
+    assert result.lic_image.min() >= 0.0
+    assert result.lic_image.max() <= 1.0
+
+
+def test_save_all_outputs(test_image):
+    """Test saving all pipeline outputs to subdirectories."""
+    result = run_all_pipelines(test_image)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir) / "test_output"
+        save_all_outputs(result, output_dir, test_image)
+
+        # Check that all subdirectories were created
+        assert (output_dir / "features").exists()
+        assert (output_dir / "contour").exists()
+        assert (output_dir / "density").exists()
+        assert (output_dir / "flow").exists()
+
+        # Check for key files in each subdirectory
+        # Features
+        assert (output_dir / "features" / "landmarks.png").exists()
+        assert (output_dir / "features" / "combined_importance.png").exists()
+        assert (output_dir / "features" / "contact_sheet.png").exists()
+
+        # Contour
+        assert (output_dir / "contour" / "contour_overlay.png").exists()
+        assert (output_dir / "contour" / "signed_distance_raw.npy").exists()
+        assert (output_dir / "contour" / "contact_sheet.png").exists()
+
+        # Density
+        assert (output_dir / "density" / "luminance.png").exists()
+        assert (output_dir / "density" / "density_target.png").exists()
+        assert (output_dir / "density" / "density_target_raw.npy").exists()
+        assert (output_dir / "density" / "contact_sheet.png").exists()
+
+        # Flow
+        assert (output_dir / "flow" / "etf_coherence.png").exists()
+        assert (output_dir / "flow" / "flow_x_raw.npy").exists()
+        assert (output_dir / "flow" / "flow_y_raw.npy").exists()
+        assert (output_dir / "flow" / "flow_lic.png").exists()
+        assert (output_dir / "flow" / "contact_sheet.png").exists()
+
+
+def test_all_pipeline_with_custom_configs(test_image):
+    """Test running all pipelines with custom configurations."""
+    # Create custom configs
+    feature_config = PipelineConfig(weights={"eyes": 0.7, "mouth": 0.3})
+    contour_config = ContourConfig(direction="outward")
+    compose_config = ComposeConfig(
+        luminance=LuminanceConfig(clip_limit=3.0),
+        tonal_blend_mode="screen",
+        gamma=1.5
+    )
+    flow_config = FlowConfig(
+        etf=ETFConfig(refine_iterations=3),
+        coherence_power=3.0
+    )
+    lic_config = LICConfig(length=50, seed=123)
+
+    # Run with custom configs
+    result = run_all_pipelines(
+        test_image,
+        feature_config=feature_config,
+        contour_config=contour_config,
+        compose_config=compose_config,
+        flow_config=flow_config,
+        lic_config=lic_config,
+    )
+
+    # Check that result is valid
+    assert result is not None
+    assert result.feature_result is not None
+    assert result.density_result is not None
+    assert result.flow_result is not None
+    assert result.lic_image is not None

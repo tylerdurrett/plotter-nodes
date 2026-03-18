@@ -449,57 +449,65 @@ output/<image>/
 
 ---
 
-## Phase 6: Full Pipeline Integration & CLI
+## Phase 6: Full Pipeline Integration & CLI ✅ COMPLETE
 
 **Purpose:** Wire everything together into the composed pipeline and extend the CLI.
 
 **Rationale:** All individual components are built and tested. This phase connects them into the end-to-end workflow the user interacts with.
 
-### 6.1 Implement composed pipeline
+**Implementation Notes:**
+- Successfully created helper functions to extract post-landmark logic from existing pipelines
+- Implemented `run_all_pipelines()` with efficient landmark sharing (detected once, used across all stages)
+- Added comprehensive CLI subcommands for density and flow pipelines
+- Extended the `all` subcommand to use the new unified pipeline
+- All tests pass, no lint errors
+- Tested successfully with real portrait images
 
-- [ ] Add `run_all_pipelines(image: np.ndarray, feature_config: PipelineConfig | None = None, contour_config: ContourConfig | None = None, compose_config: ComposeConfig | None = None, flow_config: FlowConfig | None = None, lic_config: LICConfig | None = None) -> ComposedResult` to `pipelines.py`
+### 6.1 Implement composed pipeline ✅
+
+- [x] Add `run_all_pipelines(image: np.ndarray, feature_config: PipelineConfig | None = None, contour_config: ContourConfig | None = None, compose_config: ComposeConfig | None = None, flow_config: FlowConfig | None = None, lic_config: LICConfig | None = None) -> ComposedResult` to `pipelines.py`
   - Run feature pipeline → `PipelineResult`
   - Run contour pipeline (share landmarks) → `ContourResult`
   - Run density pipeline (pass feature + contour results) → `DensityResult`
   - Run flow pipeline (pass contour result) → `FlowResult`
   - Compute LIC from flow result → `lic_image`
   - Return `ComposedResult`
-- [ ] Add `save_all_outputs(result: ComposedResult, output_dir: Path, image: np.ndarray) -> None` to `pipelines.py`
+- [x] Add `save_all_outputs(result: ComposedResult, output_dir: Path, image: np.ndarray) -> None` to `pipelines.py`
   - Delegate to existing `save_pipeline_outputs`, `save_contour_outputs`, `save_density_outputs`, `save_flow_outputs`
   - Each writes to its own subdirectory
 
-**Acceptance Criteria:**
-- Landmark detection runs once, shared across all sub-pipelines
-- All four result types populated in ComposedResult
-- LIC image present and valid
-- Save creates `features/`, `contour/`, `density/`, `flow/` subdirectories
+**Acceptance Criteria:** ✅ All met
+- Landmark detection runs once, shared across all sub-pipelines ✅
+- All four result types populated in ComposedResult ✅
+- LIC image present and valid ✅
+- Save creates `features/`, `contour/`, `density/`, `flow/` subdirectories ✅
 
-### 6.2 Extend CLI
+### 6.2 Extend CLI ✅
 
-- [ ] Add `density` subcommand to `scripts/run_pipeline.py`:
+- [x] Add `density` subcommand to `scripts/run_pipeline.py`:
   - Runs features + contour + density internally (sharing landmarks)
   - Arguments: shared args + `--clip-limit`, `--tile-size`, `--tonal-blend` (choices: multiply, screen, max, weighted), `--gamma`, `--feature-weight`, `--contour-weight`
   - Handler: build configs, run pipelines, save density outputs
-- [ ] Add `flow` subcommand:
+- [x] Add `flow` subcommand:
   - Runs contour + flow + LIC internally
   - Arguments: shared args + `--structure-sigma`, `--refine-iterations`, `--refine-sigma`, `--coherence-power`, `--lic-length`
   - Handler: build configs, run pipelines, save flow outputs
-- [ ] Extend `all` subcommand handler:
+- [x] Extend `all` subcommand handler:
   - After existing features + contour handling, also run density + flow + LIC
   - Add relevant arguments to the `all` subparser (density and flow args)
   - Use `run_all_pipelines` internally
   - Print expanded summary with density/flow verification items
-- [ ] Verify backward compatibility: `features`, `contour` subcommands unchanged
+- [x] Verify backward compatibility: `features`, `contour` subcommands unchanged
 
-**Acceptance Criteria:**
-- `python scripts/run_pipeline.py density <image>` produces density outputs
-- `python scripts/run_pipeline.py flow <image>` produces flow outputs
-- `python scripts/run_pipeline.py all <image>` produces all outputs (features + contour + density + flow)
-- Existing subcommands produce identical output to before this feature
+**Acceptance Criteria:** ✅ All met
+- `python scripts/run_pipeline.py density <image>` produces density outputs ✅
+- `python scripts/run_pipeline.py flow <image>` produces flow outputs ✅
+- `python scripts/run_pipeline.py all <image>` produces all outputs (features + contour + density + flow) ✅
+- Existing subcommands produce identical output to before this feature ✅
 
-### 6.3 Update `__init__.py` exports
+### 6.3 Update `__init__.py` exports ✅
 
-- [ ] Add all new public functions and types to `__init__.py` imports and `__all__`:
+- [x] Add all new public functions and types to `__init__.py` imports and `__all__`:
   - From `luminance`: `extract_luminance`, `apply_clahe`, `compute_tonal_target`
   - From `compose`: `compose_maps`, `build_density_target`
   - From `etf`: `compute_structure_tensor`, `extract_tangent_field`, `refine_tangent_field`, `compute_etf`
@@ -509,22 +517,23 @@ output/<image>/
   - From `pipelines`: `run_density_pipeline`, `run_flow_pipeline`, `run_all_pipelines`
   - From `viz`: `visualize_flow_field`, `overlay_lic`
 
-**Acceptance Criteria:**
-- All new public symbols importable from `portrait_map_lab` directly
-- `__all__` is complete and sorted
+**Acceptance Criteria:** ✅ All met
+- All new public symbols importable from `portrait_map_lab` directly ✅
+- `__all__` is complete and sorted ✅
 
-### 6.4 End-to-end integration tests
+### 6.4 End-to-end integration tests ✅
 
-- [ ] Write integration test in `tests/test_pipelines.py`:
+- [x] Write integration test in `tests/test_pipelines.py`:
   - `test_run_all_pipelines`: full pipeline on test image → ComposedResult with all fields populated, correct shapes, valid ranges
   - `test_all_pipeline_shared_landmarks`: verify landmarks computed once (check that feature_result.landmarks and contour_result.landmarks reference equivalent data)
   - `test_save_all_outputs`: save to temp dir, verify all expected files exist in all four subdirectories
-- [ ] Run full test suite and lint check (`ruff`)
+  - `test_all_pipeline_with_custom_configs`: test with custom configurations
+- [x] Run full test suite and lint check (`ruff`)
 
-**Acceptance Criteria:**
-- All tests pass (existing + new)
-- No lint errors
-- Full pipeline completes on test image without errors
+**Acceptance Criteria:** ✅ All met
+- All tests pass (existing + new) ✅
+- No lint errors ✅
+- Full pipeline completes on test image without errors ✅
 
 ---
 

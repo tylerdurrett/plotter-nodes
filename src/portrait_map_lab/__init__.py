@@ -44,10 +44,12 @@ from portrait_map_lab.models import (
     RemapConfig,
 )
 from portrait_map_lab.pipelines import (
+    run_all_pipelines,
     run_contour_pipeline,
     run_density_pipeline,
     run_feature_distance_pipeline,
     run_flow_pipeline,
+    save_all_outputs,
     save_contour_outputs,
     save_density_outputs,
     save_flow_outputs,
@@ -68,10 +70,12 @@ __version__ = "0.1.0"
 
 __all__ = [
     # Main pipeline functions
+    "run_all_pipelines",
     "run_feature_distance_pipeline",
     "run_contour_pipeline",
     "run_density_pipeline",
     "run_flow_pipeline",
+    "save_all_outputs",
     "save_pipeline_outputs",
     "save_contour_outputs",
     "save_density_outputs",
