@@ -108,13 +108,13 @@ docs/
 
 ### 2.1 Gradient energy metric
 
-- [ ] Create `src/portrait_map_lab/complexity_map.py`
-- [ ] Implement `compute_gradient_energy(gray: np.ndarray, sigma: float = 3.0) -> np.ndarray`:
+- [x] Create `src/portrait_map_lab/complexity_map.py`
+- [x] Implement `compute_gradient_energy(gray: np.ndarray, sigma: float = 3.0) -> np.ndarray`:
   1. Compute Sobel gradients Gx, Gy (CV_64F, ksize=3)
   2. Compute magnitude: `sqrt(Gx² + Gy²)`
   3. Smooth with Gaussian (sigma)
   4. Return raw float64 (not yet normalized)
-- [ ] Write tests in `tests/test_complexity_map.py`: `TestComputeGradientEnergy`
+- [x] Write tests in `tests/test_complexity_map.py`: `TestComputeGradientEnergy`
   - Flat image produces near-zero energy everywhere
   - Image with a sharp edge produces high energy at the edge
   - Output shape matches input shape, dtype is float64
@@ -122,82 +122,82 @@ docs/
   - Larger sigma produces smoother output (lower peak, wider spread)
 
 **Acceptance Criteria:**
-- Flat input → all values < 1e-6
-- Sharp vertical edge → peak energy at edge location
-- Output is float64, same shape as input, all values >= 0
-- `pytest tests/test_complexity_map.py::TestComputeGradientEnergy` passes
+- Flat input → all values < 1e-6 ✅
+- Sharp vertical edge → peak energy at edge location ✅
+- Output is float64, same shape as input, all values >= 0 ✅
+- `pytest tests/test_complexity_map.py::TestComputeGradientEnergy` passes ✅
 
 ### 2.2 Laplacian energy metric
 
-- [ ] Implement `compute_laplacian_energy(gray: np.ndarray, sigma: float = 3.0) -> np.ndarray`:
+- [x] Implement `compute_laplacian_energy(gray: np.ndarray, sigma: float = 3.0) -> np.ndarray`:
   1. Compute Laplacian (cv2.Laplacian, CV_64F)
   2. Take absolute value
   3. Smooth with Gaussian (sigma)
   4. Return raw float64
-- [ ] Write tests: `TestComputeLaplacianEnergy`
+- [x] Write tests: `TestComputeLaplacianEnergy`
   - Flat image produces near-zero energy
   - Fine checkerboard pattern produces high energy
   - Sharp edge produces energy at the edge
   - Output is float64, non-negative
 
 **Acceptance Criteria:**
-- Flat input → all values < 1e-6
-- Checkerboard input → uniformly high energy
-- Output is float64, same shape, all values >= 0
-- `pytest tests/test_complexity_map.py::TestComputeLaplacianEnergy` passes
+- Flat input → all values < 1e-6 ✅
+- Checkerboard input → uniformly high energy ✅
+- Output is float64, same shape, all values >= 0 ✅
+- `pytest tests/test_complexity_map.py::TestComputeLaplacianEnergy` passes ✅
 
 ### 2.3 Multiscale gradient energy metric
 
-- [ ] Implement `compute_multiscale_gradient_energy(gray: np.ndarray, scales: list[float], weights: list[float]) -> np.ndarray`:
+- [x] Implement `compute_multiscale_gradient_energy(gray: np.ndarray, scales: list[float], weights: list[float]) -> np.ndarray`:
   1. For each scale sigma, compute `compute_gradient_energy(gray, sigma)`
   2. Weighted sum: `Σ(wᵢ × energy_i)`
   3. Return raw float64
-- [ ] Validate that `len(scales) == len(weights)`, raise `ValueError` if not
-- [ ] Write tests: `TestComputeMultiscaleGradientEnergy`
+- [x] Validate that `len(scales) == len(weights)`, raise `ValueError` if not
+- [x] Write tests: `TestComputeMultiscaleGradientEnergy`
   - Produces valid output with default scales/weights
   - Mismatched scales/weights lengths raises ValueError
   - Result has contributions from multiple scales
   - Output is float64, non-negative
 
 **Acceptance Criteria:**
-- Default scales `[1.0, 3.0, 8.0]` with weights `[0.5, 0.3, 0.2]` produces valid output
-- `scales=[1.0]`, `weights=[1.0, 2.0]` raises `ValueError`
-- Output is float64, same shape, all values >= 0
-- `pytest tests/test_complexity_map.py::TestComputeMultiscaleGradientEnergy` passes
+- Default scales `[1.0, 3.0, 8.0]` with weights `[0.5, 0.3, 0.2]` produces valid output ✅
+- `scales=[1.0]`, `weights=[1.0, 2.0]` raises `ValueError` ✅
+- Output is float64, same shape, all values >= 0 ✅
+- `pytest tests/test_complexity_map.py::TestComputeMultiscaleGradientEnergy` passes ✅
 
 ### 2.4 Normalization and masking
 
-- [ ] Implement `normalize_map(raw: np.ndarray, percentile: float = 99.0) -> np.ndarray`:
+- [x] Implement `normalize_map(raw: np.ndarray, percentile: float = 99.0) -> np.ndarray`:
   1. Compute the normalization ceiling as `np.percentile(raw, percentile)`
   2. If ceiling <= 0, return zeros
   3. Divide by ceiling, clip to [0, 1]
   4. Return float64 in [0, 1]
-- [ ] Implement `apply_mask(map_array: np.ndarray, mask: np.ndarray) -> np.ndarray`:
+- [x] Implement `apply_mask(map_array: np.ndarray, mask: np.ndarray) -> np.ndarray`:
   1. Convert mask to float64 binary (0 or 1) — handle both uint8 0/255 and float 0/1 inputs
   2. Multiply element-wise by mask
   3. Return float64 in [0, 1]
-- [ ] Write tests: `TestNormalizeMap` (percentile=100 is max, percentile=99 clips top 1%, zero input returns zeros, output always in [0,1])
-- [ ] Write tests: `TestApplyMask` (zeroes out masked regions, preserves unmasked, handles uint8 0/255 and float 0/1)
+- [x] Write tests: `TestNormalizeMap` (percentile=100 is max, percentile=99 clips top 1%, zero input returns zeros, output always in [0,1])
+- [x] Write tests: `TestApplyMask` (zeroes out masked regions, preserves unmasked, handles uint8 0/255 and float 0/1)
 
 **Acceptance Criteria:**
-- `normalize_map(arr, percentile=100.0)` divides by max
-- `normalize_map(arr, percentile=99.0)` clips the top 1% of values to 1.0
-- `normalize_map(np.zeros(...))` returns zeros (no divide-by-zero)
-- `apply_mask` zeroes out regions where mask is 0, preserves where mask is nonzero
-- `apply_mask` handles both uint8 (0/255) and float (0.0/1.0) masks
-- `pytest tests/test_complexity_map.py::TestNormalizeMap tests/test_complexity_map.py::TestApplyMask` passes
+- `normalize_map(arr, percentile=100.0)` divides by max ✅
+- `normalize_map(arr, percentile=99.0)` clips the top 1% of values to 1.0 ✅
+- `normalize_map(np.zeros(...))` returns zeros (no divide-by-zero) ✅
+- `apply_mask` zeroes out regions where mask is 0, preserves where mask is nonzero ✅
+- `apply_mask` handles both uint8 (0/255) and float (0.0/1.0) masks ✅
+- `pytest tests/test_complexity_map.py::TestNormalizeMap tests/test_complexity_map.py::TestApplyMask` passes ✅
 
 ### 2.5 Main entry point and module exports
 
-- [ ] Implement `compute_complexity_map(image: np.ndarray, config: ComplexityConfig | None = None, mask: np.ndarray | None = None) -> ComplexityResult`:
+- [x] Implement `compute_complexity_map(image: np.ndarray, config: ComplexityConfig | None = None, mask: np.ndarray | None = None) -> ComplexityResult`:
   1. Convert to grayscale float64 [0, 1] (handle BGR uint8 and grayscale input)
   2. Dispatch to metric function based on `config.metric`
   3. Normalize via `normalize_map`
   4. Apply mask if provided
   5. Return `ComplexityResult` with raw_complexity, complexity, metric name
-- [ ] Raise `ValueError` for unknown metric names
-- [ ] Add `__all__` listing all public names
-- [ ] Write tests: `TestComputeComplexityMap`
+- [x] Raise `ValueError` for unknown metric names
+- [x] Add `__all__` listing all public names
+- [x] Write tests: `TestComputeComplexityMap`
   - Default config produces valid result
   - Each metric name dispatches correctly
   - Unknown metric raises ValueError
@@ -205,11 +205,19 @@ docs/
   - Result fields have correct types and shapes
 
 **Acceptance Criteria:**
-- `compute_complexity_map(image)` produces `ComplexityResult` with `complexity` in [0, 1]
-- Each metric dispatches correctly; `"unknown"` raises `ValueError`
-- With mask, complexity is zero outside masked region
-- `ruff check src/portrait_map_lab/complexity_map.py` passes
-- `pytest tests/test_complexity_map.py` passes (all tests)
+- `compute_complexity_map(image)` produces `ComplexityResult` with `complexity` in [0, 1] ✅
+- Each metric dispatches correctly; `"unknown"` raises `ValueError` ✅
+- With mask, complexity is zero outside masked region ✅
+- `ruff check src/portrait_map_lab/complexity_map.py` passes ✅
+- `pytest tests/test_complexity_map.py` passes (all tests) ✅
+
+**Implementation Notes:**
+- Phase 2 completed successfully (2026-03-18)
+- All complexity metric functions implemented as standalone composable functions
+- Comprehensive test coverage with 30 tests, all passing
+- Added robust handling for different image input formats (BGR/grayscale, uint8/float64)
+- Code quality verified with ruff (all checks passing)
+- Tested with real images to verify visual output is correct
 
 ---
 
