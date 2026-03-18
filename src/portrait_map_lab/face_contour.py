@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
+from scipy.spatial import ConvexHull
 
 from portrait_map_lab.distance_fields import compute_distance_field
 from portrait_map_lab.models import LandmarkResult
@@ -57,76 +58,30 @@ FACE_OVAL_INDICES: list[int] = [
 ]
 
 
-def get_face_oval_polygon(
-    landmarks: LandmarkResult,
-    expand: bool = True,
-    search_radius: float = 50.0,
-    angle_tolerance: float = 0.3,
-) -> np.ndarray:
-    """Extract face oval polygon from detected landmarks.
+def get_face_oval_polygon(landmarks: LandmarkResult) -> np.ndarray:
+    """Extract the face boundary as the convex hull of all landmarks.
 
-    The FACE_OVAL topology is the outermost ring of the mesh triangulation,
-    but when the 3D face mesh is projected to 2D image coordinates, interior
-    mesh vertices on the cheeks can be spatially more lateral. When
-    expand=True (default), each oval vertex is pushed outward to the most
-    lateral nearby landmark — the one furthest from the face centroid in
-    roughly the same angular direction.
+    Uses the convex hull of all 478 landmark points, which gives the
+    tightest outer boundary that encloses every detected face landmark.
+    This captures the full visible face including cheeks, which the
+    FACEMESH_FACE_OVAL topology can miss due to 3D→2D projection.
 
     Parameters
     ----------
     landmarks
         Face landmark detection result containing 478 landmark points.
-    expand
-        If True, expand each vertex to the most lateral nearby landmark.
-    search_radius
-        Maximum pixel distance to search for more lateral landmarks.
-    angle_tolerance
-        Maximum angular difference (radians) from centroid direction
-        for a candidate to be considered (~0.3 rad ≈ 17°).
 
     Returns
     -------
     np.ndarray
-        Face oval polygon as Nx2 array of pixel coordinates (float64).
-        N is the number of face oval points (36).
+        Face boundary polygon as Nx2 array of pixel coordinates (float64),
+        ordered clockwise.
     """
-    base_points = landmarks.landmarks[FACE_OVAL_INDICES].astype(np.float64)
-
-    if not expand:
-        return base_points
-
-    all_landmarks = landmarks.landmarks.astype(np.float64)
-    centroid = np.mean(all_landmarks, axis=0)
-
-    expanded = base_points.copy()
-    for i, pt in enumerate(base_points):
-        direction = pt - centroid
-        dist_oval = np.linalg.norm(direction)
-        angle_oval = np.arctan2(direction[1], direction[0])
-
-        best_dist = dist_oval
-        best_pt = pt
-
-        for lm in all_landmarks:
-            if abs(lm[0] - pt[0]) > search_radius or abs(lm[1] - pt[1]) > search_radius:
-                continue
-
-            lm_dir = lm - centroid
-            lm_dist = np.linalg.norm(lm_dir)
-            if lm_dist <= best_dist:
-                continue
-
-            lm_angle = np.arctan2(lm_dir[1], lm_dir[0])
-            angle_diff = abs(lm_angle - angle_oval)
-            if angle_diff > np.pi:
-                angle_diff = 2 * np.pi - angle_diff
-            if angle_diff < angle_tolerance:
-                best_dist = lm_dist
-                best_pt = lm
-
-        expanded[i] = best_pt
-
-    return expanded
+    points = landmarks.landmarks.astype(np.float64)
+    hull = ConvexHull(points)
+    # ConvexHull vertices are counterclockwise; reverse for clockwise
+    hull_points = points[hull.vertices[::-1]]
+    return hull_points
 
 
 def rasterize_contour_mask(

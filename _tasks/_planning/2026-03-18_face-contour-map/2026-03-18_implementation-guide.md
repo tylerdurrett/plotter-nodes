@@ -125,13 +125,14 @@ The `all` subcommand produces both subdirectories side by side.
 ### 3.1 Face oval indices and polygon extraction
 
 - [x] Create `src/portrait_map_lab/face_contour.py`
-- [x] Define `FACE_OVAL_INDICES: list[int]` — 36 ordered landmark indices from MediaPipe FACEMESH_FACE_OVAL, starting at forehead (10), walking clockwise
-- [x] Implement `get_face_oval_polygon(landmarks: LandmarkResult, expand: bool = True) -> np.ndarray` — extracts Nx2 pixel coordinates for the face oval from the 478-point landmark array. When `expand=True` (default), pushes each vertex outward to the most lateral nearby landmark in the same angular direction from the face centroid, compensating for the 3D→2D projection that makes interior mesh vertices spatially more lateral than the oval ring on the cheeks.
-- [x] Write tests in `tests/test_face_contour.py`: `TestFaceOvalIndices` (count is 36, all in 0-477 range, no duplicates) and `TestGetFaceOvalPolygon` (correct shape, dtype, coordinates within image bounds, expand=False exact indices, expand produces more lateral points)
+- [x] Define `FACE_OVAL_INDICES: list[int]` — 36 ordered landmark indices from MediaPipe FACEMESH_FACE_OVAL (retained for reference/fallback)
+- [x] Implement `get_face_oval_polygon(landmarks: LandmarkResult) -> np.ndarray` — computes the convex hull of all 478 landmark points, returning the tightest outer boundary that encloses every detected face landmark. This captures the full visible face including cheeks, which the FACEMESH_FACE_OVAL topology misses due to 3D→2D projection.
+- [x] Write tests in `tests/test_face_contour.py`: `TestFaceOvalIndices` (count is 36, all in 0-477 range, no duplicates) and `TestGetFaceOvalPolygon` (Nx2 shape, float64 dtype, coordinates within image bounds, hull encloses all landmarks)
 
 **Acceptance Criteria:**
 - `FACE_OVAL_INDICES` has exactly 36 unique indices, all in [0, 477] ✅
-- `get_face_oval_polygon` returns `(36, 2)` float64 array with coordinates within image bounds ✅
+- `get_face_oval_polygon` returns `(N, 2)` float64 array with coordinates within image bounds ✅
+- Convex hull encloses all 478 landmarks ✅
 - `pytest tests/test_face_contour.py::TestFaceOvalIndices tests/test_face_contour.py::TestGetFaceOvalPolygon` passes ✅
 
 ### 3.2 Contour and filled mask rasterization
@@ -182,12 +183,10 @@ The `all` subcommand produces both subdirectories side by side.
 
 **Implementation Notes:**
 - Successfully created the face_contour.py module with all required functions
-- Implemented comprehensive unit tests with 30 test cases covering all functions
 - All tests pass; code quality verified with ruff (linting and formatting)
-- The 36 face oval indices trace the face boundary clockwise from forehead
 - Functions are composable and work with existing infrastructure (compute_distance_field)
-- **Bug fix:** Original FACE_OVAL_INDICES had incorrect jaw/chin landmarks (340, 346-348, 450-453, 464, 228-232, 116-118, 227) pointing to inner face regions instead of the jawline. Corrected to canonical FACEMESH_FACE_OVAL chain (288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234).
-- **Enhancement:** `get_face_oval_polygon` now expands each vertex to the most lateral nearby landmark by default. The FACE_OVAL is the topological boundary of the mesh, but when the 3D mesh is projected to 2D, interior cheek landmarks can be spatially more lateral. The expand logic compensates for this by searching for landmarks further from the face centroid in the same angular direction (within 50px radius, 0.3 rad tolerance).
+- **Bug fix:** Original FACE_OVAL_INDICES had incorrect jaw/chin landmarks pointing to inner face regions. Corrected to canonical FACEMESH_FACE_OVAL chain.
+- **Enhancement:** `get_face_oval_polygon` now uses the convex hull of all 478 landmarks instead of the 36 FACE_OVAL indices. The FACEMESH_FACE_OVAL is the topological boundary of the mesh, but when the 3D mesh projects to 2D, interior cheek landmarks are spatially more lateral. The convex hull captures the full visible face boundary with no tuning parameters. `FACE_OVAL_INDICES` retained for reference.
 - Ready for Phase 4: Pipeline and Visualization integration
 
 ---
@@ -399,5 +398,5 @@ Phase 7 (Verification)
 | Direction mode in `prepare_directional_distance` (not in `remap_influence`) | Keeps the existing remap module unchanged; direction is a contour-specific concern handled upstream |
 | Subcommand CLI architecture | Each map type gets its own parameter namespace. Scales cleanly — new map types are new subcommands, not more flags on a flat parser |
 | Hardcoded face oval indices | MediaPipe Python does not reliably expose `face_mesh_connections` at runtime. Hardcoding from the canonical source is the pragmatic choice |
-| Expand oval vertices to most lateral nearby landmark | The FACE_OVAL is the topological mesh boundary, but 3D→2D projection makes interior cheek landmarks spatially more lateral. Expanding outward from the centroid captures the true visible face boundary |
+| Convex hull of all landmarks instead of FACE_OVAL indices | The FACE_OVAL is the topological mesh boundary, but 3D→2D projection makes interior cheek landmarks spatially more lateral. The convex hull captures the full visible face boundary with no tuning parameters |
 | Contour mask pixels always get distance=0 | Prevents polyline/fillPoly rasterization boundary mismatch from producing incorrect signed distances at the contour |

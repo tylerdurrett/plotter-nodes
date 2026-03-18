@@ -22,7 +22,9 @@ class TestContourPipeline:
 
         # Verify result structure
         assert result.landmarks is not None
-        assert result.contour_polygon.shape == (36, 2)  # 36 face oval points
+        assert result.contour_polygon.ndim == 2
+        assert result.contour_polygon.shape[1] == 2
+        assert result.contour_polygon.shape[0] >= 3  # convex hull
         assert result.contour_mask.shape == result.landmarks.image_shape
         assert result.filled_mask.shape == result.landmarks.image_shape
         assert result.signed_distance.shape == result.landmarks.image_shape
@@ -50,7 +52,8 @@ class TestContourPipeline:
         result = run_contour_pipeline(test_image, config)
 
         # Verify result exists and has correct shape
-        assert result.contour_polygon.shape == (36, 2)
+        assert result.contour_polygon.ndim == 2
+        assert result.contour_polygon.shape[1] == 2
         assert result.influence_map.shape == result.landmarks.image_shape
 
     def test_all_direction_modes(self, test_image):

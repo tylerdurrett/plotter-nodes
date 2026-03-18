@@ -35,9 +35,8 @@ class TestFaceOvalIndices:
 class TestGetFaceOvalPolygon:
     """Tests for get_face_oval_polygon function."""
 
-    def test_correct_shape(self):
-        """Should return (36, 2) array from 478 landmarks."""
-        # Create mock landmarks
+    def test_returns_nx2_array(self):
+        """Should return an Nx2 array."""
         landmarks = np.random.rand(478, 2) * 100
         landmark_result = LandmarkResult(
             landmarks=landmarks, image_shape=(480, 640), confidence=0.95
@@ -45,7 +44,10 @@ class TestGetFaceOvalPolygon:
 
         polygon = get_face_oval_polygon(landmark_result)
 
-        assert polygon.shape == (36, 2)
+        assert polygon.ndim == 2
+        assert polygon.shape[1] == 2
+        # Convex hull has at least 3 vertices
+        assert polygon.shape[0] >= 3
 
     def test_correct_dtype(self):
         """Should return float64 array."""
@@ -60,7 +62,6 @@ class TestGetFaceOvalPolygon:
 
     def test_coordinates_within_image_bounds(self):
         """Returned coordinates should be within image dimensions."""
-        # Create landmarks within image bounds
         h, w = 480, 640
         landmarks = np.random.rand(478, 2) * [w, h]
         landmark_result = LandmarkResult(landmarks=landmarks, image_shape=(h, w), confidence=0.95)
@@ -72,47 +73,22 @@ class TestGetFaceOvalPolygon:
         assert np.all(polygon[:, 1] >= 0)
         assert np.all(polygon[:, 1] <= h)
 
-    def test_extracts_correct_indices_without_expand(self):
-        """Should extract the exact landmark points when expand=False."""
-        # Create landmarks where each point has unique values
-        landmarks = np.arange(478 * 2).reshape(478, 2).astype(np.float32)
+    def test_hull_encloses_all_landmarks(self):
+        """Convex hull should enclose all landmark points."""
+        from scipy.spatial import Delaunay
+
+        np.random.seed(42)
+        landmarks = np.random.rand(478, 2) * 100
         landmark_result = LandmarkResult(
             landmarks=landmarks, image_shape=(480, 640), confidence=0.95
         )
 
-        polygon = get_face_oval_polygon(landmark_result, expand=False)
+        polygon = get_face_oval_polygon(landmark_result)
 
-        # Check that the extracted points match the expected indices
-        for i, idx in enumerate(FACE_OVAL_INDICES):
-            np.testing.assert_array_equal(polygon[i], landmarks[idx])
-
-    def test_expand_produces_more_lateral_points(self):
-        """Expanded polygon should be at least as far from centroid as base."""
-        # Create landmarks in a grid so some are further from centroid
-        landmarks = np.zeros((478, 2), dtype=np.float32)
-        # Place face oval landmarks in a circle
-        for i, idx in enumerate(FACE_OVAL_INDICES):
-            angle = 2 * np.pi * i / len(FACE_OVAL_INDICES)
-            landmarks[idx] = [320 + 100 * np.cos(angle), 240 + 100 * np.sin(angle)]
-        # Place some other landmarks further out in the same directions
-        for j in range(478):
-            if j not in FACE_OVAL_INDICES:
-                landmarks[j] = [320 + np.random.uniform(-150, 150),
-                                240 + np.random.uniform(-150, 150)]
-
-        landmark_result = LandmarkResult(
-            landmarks=landmarks, image_shape=(480, 640), confidence=0.95
-        )
-
-        base = get_face_oval_polygon(landmark_result, expand=False)
-        expanded = get_face_oval_polygon(landmark_result, expand=True)
-
-        centroid = np.mean(landmarks, axis=0)
-        base_dists = np.linalg.norm(base - centroid, axis=1)
-        expanded_dists = np.linalg.norm(expanded - centroid, axis=1)
-
-        # Expanded should be at least as far from centroid as base for every vertex
-        assert np.all(expanded_dists >= base_dists - 1e-6)
+        # All original landmarks should be inside or on the hull
+        hull = Delaunay(polygon)
+        inside = hull.find_simplex(landmarks) >= 0
+        assert np.all(inside)
 
 
 class TestRasterizeContourMask:
