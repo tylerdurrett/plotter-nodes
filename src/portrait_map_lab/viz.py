@@ -86,16 +86,16 @@ def make_contact_sheet(images: dict[str, np.ndarray], columns: int = 4) -> np.nd
     """
     if not images:
         # Return small white image if no images provided
-        return np.full((256, 256, 3), 255, dtype=np.uint8)
+        return np.full((512, 512, 3), 255, dtype=np.uint8)
 
     # Calculate grid dimensions
     n_images = len(images)
     rows = (n_images + columns - 1) // columns  # Ceiling division
 
     # Cell dimensions with space for labels
-    cell_width = 256
-    cell_height = 256
-    label_height = 30
+    cell_width = 512
+    cell_height = 512
+    label_height = 60
     total_cell_height = cell_height + label_height
 
     # Create white canvas
@@ -125,15 +125,15 @@ def make_contact_sheet(images: dict[str, np.ndarray], columns: int = 4) -> np.nd
         canvas[y + pad_y : y + pad_y + new_h, x + pad_x : x + pad_x + new_w] = resized
 
         # Add label above image
-        text_y = row * total_cell_height + 20  # Position text in label area
+        text_y = row * total_cell_height + 40  # Position text in label area
         cv2.putText(
             canvas,
             label,
-            (x + 10, text_y),
+            (x + 20, text_y),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
+            1.2,
             (0, 0, 0),  # Black text
-            1,
+            2,
             cv2.LINE_AA,
         )
 
