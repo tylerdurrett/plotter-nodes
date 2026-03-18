@@ -144,16 +144,18 @@ plotter-nodes/
 
 ### 2.2 Landmark Detection Module
 
-- [ ] Create `landmarks.py` with `from __future__ import annotations`
-- [ ] Implement `detect_landmarks(image: np.ndarray) -> LandmarkResult`:
+- [x] Create `landmarks.py` with `from __future__ import annotations`
+- [x] Implement `detect_landmarks(image: np.ndarray) -> LandmarkResult`:
   - Initialize MediaPipe Face Mesh with `static_image_mode=True`
   - Convert normalized landmarks to pixel coordinates
   - Return first face found; raise `ValueError` if no face detected
   - Use `logging` module for warnings (multi-face, low confidence)
-- [ ] Write `tests/test_landmarks.py`:
+- [x] Write `tests/test_landmarks.py`:
   - Test: returns `LandmarkResult` with correct shape for test image
   - Test: landmark coordinates are within image bounds
   - Test: raises `ValueError` on a blank/non-face image
+
+> **Note:** mediapipe 0.10.32 does not include the legacy `mp.solutions.face_mesh` API. Implementation uses the Tasks API (`mp.tasks.vision.FaceLandmarker`) with a downloadable `.task` model file cached in `models/` (git-ignored). Added `_get_model_path()` helper that auto-downloads and caches the model, with `FACE_LANDMARKER_MODEL_PATH` env var override. Landmarks are stored as Nx2 (z coordinate dropped — not needed for downstream distance fields). Confidence derived from landmark `presence` scores. 5 tests pass covering shape, bounds, image shape match, confidence range, and blank-image error.
 
 **Acceptance Criteria:**
 - `detect_landmarks(test_image)` returns a `LandmarkResult` with 478 landmarks (MediaPipe Face Mesh v2)
