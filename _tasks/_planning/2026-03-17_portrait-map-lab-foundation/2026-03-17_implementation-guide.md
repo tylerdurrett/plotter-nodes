@@ -136,7 +136,7 @@ plotter-nodes/
 
 - [x] Add some portrait test images to `test_images/`
 - [x] Add `test_images/` to version control (small enough to commit)
-- [ ] Add a `conftest.py` fixture that loads the test image path and array
+- [x] Add a `conftest.py` fixture that loads the test image path and array
 
 **Acceptance Criteria:**
 - `conftest.py` fixture returns a valid numpy array when loaded
