@@ -134,11 +134,10 @@ Where:
 
 ## Contour Extraction
 
-### Convex Hull vs. FACE_OVAL
+### Convex Hull Method
 
-The implementation uses two approaches:
+The landmark-based contour extraction uses the convex hull of all 478 landmarks:
 
-#### Convex Hull (Primary Method)
 ```python
 # Compute convex hull of all 478 landmarks
 points_2d = landmarks.landmarks[:, :2]
@@ -151,19 +150,6 @@ polygon = points_2d[hull.vertices]
 - Includes lateral cheek regions
 - No parameter tuning needed
 - Robust to 3D projection
-
-#### FACE_OVAL Indices (Reference)
-```python
-# 36 predefined indices from MediaPipe topology
-FACE_OVAL_INDICES = [10, 338, 297, 332, 284, ...]
-polygon = landmarks.landmarks[FACE_OVAL_INDICES]
-```
-
-**Characteristics:**
-- Topological mesh boundary
-- May miss lateral cheek points
-- Fixed connectivity pattern
-- Retained for compatibility
 
 ## Direction Modes
 

@@ -14,49 +14,6 @@ from scipy.spatial import ConvexHull
 from portrait_map_lab.distance_fields import compute_distance_field
 from portrait_map_lab.models import LandmarkResult
 
-# MediaPipe Face Mesh face oval landmark indices (36 points)
-# These indices trace the face boundary starting from the forehead,
-# going clockwise around the face (right temple, right jaw, chin,
-# left jaw, left temple, back to forehead)
-FACE_OVAL_INDICES: list[int] = [
-    10,  # Forehead center
-    338,  # Right forehead
-    297,  # Right temple top
-    332,  # Right temple
-    284,  # Right temple bottom
-    251,  # Right cheek top
-    389,  # Right cheek
-    356,  # Right cheek bottom
-    454,  # Right jaw top
-    323,  # Right jaw middle
-    361,  # Right jaw bottom
-    288,  # Right jawline
-    397,  # Right jaw angle
-    365,  # Right jaw lower
-    379,  # Right chin side
-    378,  # Right chin
-    400,  # Chin right
-    377,  # Chin center right
-    152,  # Chin center
-    148,  # Chin center left
-    176,  # Chin left
-    149,  # Left chin
-    150,  # Left chin side
-    136,  # Left jaw lower
-    172,  # Left jaw angle
-    58,  # Left jawline
-    132,  # Left jaw bottom
-    93,  # Left jaw middle
-    234,  # Left jaw top
-    127,  # Left cheek bottom
-    162,  # Left cheek
-    21,  # Left cheek top
-    54,  # Left temple bottom
-    103,  # Left temple
-    67,  # Left temple top
-    109,  # Left forehead
-]
-
 
 def get_face_oval_polygon(landmarks: LandmarkResult) -> np.ndarray:
     """Extract the face boundary as the convex hull of all landmarks.
@@ -247,7 +204,6 @@ def prepare_directional_distance(
 
 
 __all__ = [
-    "FACE_OVAL_INDICES",
     "get_face_oval_polygon",
     "rasterize_contour_mask",
     "rasterize_filled_mask",

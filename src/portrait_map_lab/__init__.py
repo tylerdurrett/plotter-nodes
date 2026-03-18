@@ -18,7 +18,6 @@ from portrait_map_lab.export import (
     save_export_bundle,
 )
 from portrait_map_lab.face_contour import (
-    FACE_OVAL_INDICES,
     compute_signed_distance,
     get_face_oval_polygon,
     prepare_directional_distance,
@@ -124,7 +123,6 @@ __all__ = [
     "RegionDefinition",
     "RemapConfig",
     # Face contour functions
-    "FACE_OVAL_INDICES",
     "get_face_oval_polygon",
     "rasterize_contour_mask",
     "rasterize_filled_mask",

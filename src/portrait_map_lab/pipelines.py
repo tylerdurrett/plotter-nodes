@@ -27,6 +27,13 @@ from portrait_map_lab.flow_fields import (
 )
 from portrait_map_lab.landmarks import detect_landmarks
 from portrait_map_lab.lic import compute_lic
+from portrait_map_lab.segmentation import (
+    SEGMENTATION_ACCESSORIES,
+    SEGMENTATION_FACE_SKIN,
+    SEGMENTATION_HAIR,
+    extract_segmentation_polygon,
+    segment_image,
+)
 from portrait_map_lab.luminance import compute_tonal_target
 from portrait_map_lab.masks import build_region_masks
 from portrait_map_lab.models import (
@@ -259,37 +266,49 @@ def run_contour_pipeline(image: np.ndarray, config: ContourConfig | None = None)
     if config is None:
         config = ContourConfig()
 
-    logger.info("Starting contour distance pipeline...")
+    logger.info("Starting contour distance pipeline (method: %s)...", config.contour_method)
 
-    # Step 1: Detect landmarks
-    logger.info("Detecting face landmarks...")
-    landmarks = detect_landmarks(image)
+    # Step 1: Extract contour polygon based on method
+    if config.contour_method == "landmarks":
+        logger.info("Detecting face landmarks...")
+        landmarks = detect_landmarks(image)
+        logger.info("Extracting face oval polygon...")
+        contour_polygon = get_face_oval_polygon(landmarks)
+        image_shape = landmarks.image_shape
+    elif config.contour_method in ("segmentation_face", "segmentation_head"):
+        landmarks = None
+        logger.info("Running segmentation...")
+        category_mask = segment_image(image)
+        classes = _get_segmentation_classes(config.contour_method)
+        logger.info("Extracting contour polygon from segmentation (classes: %s)...", classes)
+        contour_polygon = extract_segmentation_polygon(
+            category_mask, classes, epsilon_factor=config.epsilon_factor
+        )
+        image_shape = image.shape[:2]
+    else:
+        raise ValueError(f"Unknown contour method: {config.contour_method}")
 
-    # Step 2: Extract face oval polygon
-    logger.info("Extracting face oval polygon...")
-    contour_polygon = get_face_oval_polygon(landmarks)
-
-    # Step 3: Rasterize contour mask
+    # Step 2: Rasterize contour mask
     logger.info("Rasterizing contour mask...")
     contour_mask = rasterize_contour_mask(
-        contour_polygon, landmarks.image_shape, thickness=config.contour_thickness
+        contour_polygon, image_shape, thickness=config.contour_thickness
     )
 
-    # Step 4: Rasterize filled mask
+    # Step 3: Rasterize filled mask
     logger.info("Rasterizing filled mask...")
-    filled_mask = rasterize_filled_mask(contour_polygon, landmarks.image_shape)
+    filled_mask = rasterize_filled_mask(contour_polygon, image_shape)
 
-    # Step 5: Compute signed distance field
+    # Step 4: Compute signed distance field
     logger.info("Computing signed distance field...")
     signed_distance = compute_signed_distance(contour_mask, filled_mask)
 
-    # Step 6: Prepare directional distance
+    # Step 5: Prepare directional distance
     logger.info("Preparing directional distance (mode: %s)...", config.direction)
     directional_distance = prepare_directional_distance(
         signed_distance, mode=config.direction, band_width=config.band_width
     )
 
-    # Step 7: Remap to influence map
+    # Step 6: Remap to influence map
     logger.info("Remapping distance to influence...")
     influence_map = remap_influence(directional_distance, config.remap)
 
@@ -304,6 +323,15 @@ def run_contour_pipeline(image: np.ndarray, config: ContourConfig | None = None)
         directional_distance=directional_distance,
         influence_map=influence_map,
     )
+
+
+def _get_segmentation_classes(method: str) -> list[int]:
+    """Return segmentation class indices for the given contour method."""
+    if method == "segmentation_face":
+        return [SEGMENTATION_FACE_SKIN]
+    elif method == "segmentation_head":
+        return [SEGMENTATION_HAIR, SEGMENTATION_FACE_SKIN, SEGMENTATION_ACCESSORIES]
+    raise ValueError(f"Unknown segmentation method: {method}")
 
 
 def save_contour_outputs(result: ContourResult, image: np.ndarray, output_dir: Path) -> None:
@@ -810,27 +838,46 @@ def _run_feature_pipeline_with_landmarks(
 def _run_contour_pipeline_with_landmarks(
     landmarks: LandmarkResult,
     config: ContourConfig | None = None,
+    image: np.ndarray | None = None,
 ) -> ContourResult:
     """Run contour pipeline with pre-computed landmarks.
 
     Internal helper to avoid duplicate landmark detection.
+    For segmentation methods, the *image* parameter is required.
     """
     if config is None:
         config = ContourConfig()
 
-    # Extract face oval polygon
-    logger.info("Extracting face oval polygon...")
-    contour_polygon = get_face_oval_polygon(landmarks)
+    if config.contour_method == "landmarks":
+        # Use pre-computed landmarks
+        logger.info("Extracting face oval polygon...")
+        contour_polygon = get_face_oval_polygon(landmarks)
+        result_landmarks = landmarks
+    elif config.contour_method in ("segmentation_face", "segmentation_head"):
+        if image is None:
+            raise ValueError("image is required for segmentation contour methods")
+        result_landmarks = None
+        logger.info("Running segmentation...")
+        category_mask = segment_image(image)
+        classes = _get_segmentation_classes(config.contour_method)
+        logger.info("Extracting contour polygon from segmentation (classes: %s)...", classes)
+        contour_polygon = extract_segmentation_polygon(
+            category_mask, classes, epsilon_factor=config.epsilon_factor
+        )
+    else:
+        raise ValueError(f"Unknown contour method: {config.contour_method}")
+
+    image_shape = landmarks.image_shape
 
     # Rasterize contour mask
     logger.info("Rasterizing contour mask...")
     contour_mask = rasterize_contour_mask(
-        contour_polygon, landmarks.image_shape, thickness=config.contour_thickness
+        contour_polygon, image_shape, thickness=config.contour_thickness
     )
 
     # Rasterize filled mask
     logger.info("Rasterizing filled mask...")
-    filled_mask = rasterize_filled_mask(contour_polygon, landmarks.image_shape)
+    filled_mask = rasterize_filled_mask(contour_polygon, image_shape)
 
     # Compute signed distance field
     logger.info("Computing signed distance field...")
@@ -847,7 +894,7 @@ def _run_contour_pipeline_with_landmarks(
     influence_map = remap_influence(directional_distance, config.remap)
 
     return ContourResult(
-        landmarks=landmarks,
+        landmarks=result_landmarks,
         contour_polygon=contour_polygon,
         contour_mask=contour_mask,
         filled_mask=filled_mask,
@@ -914,7 +961,9 @@ def run_all_pipelines(
 
     # Step 3: Run contour pipeline with shared landmarks
     logger.info("\n--- Stage 2: Contour Pipeline ---")
-    contour_result = _run_contour_pipeline_with_landmarks(landmarks, contour_config)
+    contour_result = _run_contour_pipeline_with_landmarks(
+        landmarks, contour_config, image=image
+    )
     logger.info("Contour pipeline completed")
 
     # Step 4: Run density pipeline using results from features and contour

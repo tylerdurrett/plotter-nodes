@@ -153,6 +153,20 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Thickness of the contour line in pixels",
     )
+    contour_parser.add_argument(
+        "--contour-method",
+        type=str,
+        choices=["landmarks", "segmentation_face", "segmentation_head"],
+        default="landmarks",
+        help="Method for contour extraction: landmarks (convex hull), "
+        "segmentation_face (face skin mask), segmentation_head (hair+face+accessories)",
+    )
+    contour_parser.add_argument(
+        "--epsilon-factor",
+        type=float,
+        default=0.005,
+        help="Contour simplification factor for segmentation methods (0 to disable)",
+    )
 
     # Density subcommand (density composition pipeline)
     density_parser = subparsers.add_parser(
@@ -321,6 +335,20 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=1,
         help="Thickness of the contour line in pixels",
+    )
+    all_parser.add_argument(
+        "--contour-method",
+        type=str,
+        choices=["landmarks", "segmentation_face", "segmentation_head"],
+        default="landmarks",
+        help="Method for contour extraction: landmarks (convex hull), "
+        "segmentation_face (face skin mask), segmentation_head (hair+face+accessories)",
+    )
+    all_parser.add_argument(
+        "--epsilon-factor",
+        type=float,
+        default=0.005,
+        help="Contour simplification factor for segmentation methods (0 to disable)",
     )
     # Density arguments
     all_parser.add_argument(
@@ -554,10 +582,12 @@ def handle_contour(
     # Build contour configuration
     remap_config = build_remap_config(args)
     config = ContourConfig(
+        contour_method=args.contour_method,
         remap=remap_config,
         direction=args.direction,
         band_width=args.band_width,
         contour_thickness=args.contour_thickness,
+        epsilon_factor=args.epsilon_factor,
         output_dir=str(output_dir),
     )
 
@@ -575,8 +605,11 @@ def handle_contour(
     print("=" * 60)
     print(f"Input image: {args.image_path}")
     print(f"Image dimensions: {width}x{height}")
-    print(f"Landmarks detected: {len(result.landmarks.landmarks)}")
-    print(f"Face detection confidence: {result.landmarks.confidence:.2%}")
+    if result.landmarks is not None:
+        print(f"Landmarks detected: {len(result.landmarks.landmarks)}")
+        print(f"Face detection confidence: {result.landmarks.confidence:.2%}")
+    else:
+        print(f"Contour method: {args.contour_method}")
     print(f"Output directory: {output_dir}")
     print("\nFiles created:")
     print("  - contour_overlay.png (face oval overlay)")
@@ -848,10 +881,12 @@ def handle_all(
 
     # Contour config
     contour_config = ContourConfig(
+        contour_method=args.contour_method,
         remap=remap_config,
         direction=args.direction,
         band_width=args.band_width,
         contour_thickness=args.contour_thickness,
+        epsilon_factor=args.epsilon_factor,
         output_dir=str(base_output_dir / "contour"),
     )
 
@@ -923,6 +958,7 @@ def handle_all(
     print("\n--- Stage 2: Contour Pipeline ---")
     print(f"  Output directory: {base_output_dir / 'contour'}")
     print("  Files created: contour overlay, masks, signed/directional distance")
+    print(f"  Method: {args.contour_method}")
     print(f"  Direction: {args.direction}, Thickness: {args.contour_thickness}")
     print("\n--- Stage 3: Density Composition ---")
     print(f"  Output directory: {base_output_dir / 'density'}")

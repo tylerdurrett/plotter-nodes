@@ -60,10 +60,12 @@ class RemapConfig:
 class ContourConfig:
     """Configuration for face contour distance pipeline."""
 
+    contour_method: str = "landmarks"
     remap: RemapConfig = field(default_factory=RemapConfig)
     direction: str = "inward"
     band_width: float | None = None
     contour_thickness: int = 1
+    epsilon_factor: float = 0.005
     output_dir: str = "output"
 
 
@@ -165,7 +167,7 @@ class PipelineResult:
 class ContourResult:
     """Result of face contour distance pipeline."""
 
-    landmarks: LandmarkResult
+    landmarks: LandmarkResult | None
     contour_polygon: np.ndarray
     contour_mask: np.ndarray
     filled_mask: np.ndarray

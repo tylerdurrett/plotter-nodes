@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from portrait_map_lab.face_contour import (
-    FACE_OVAL_INDICES,
     compute_signed_distance,
     get_face_oval_polygon,
     prepare_directional_distance,
@@ -14,22 +13,6 @@ from portrait_map_lab.face_contour import (
     rasterize_filled_mask,
 )
 from portrait_map_lab.models import LandmarkResult
-
-
-class TestFaceOvalIndices:
-    """Tests for FACE_OVAL_INDICES constant."""
-
-    def test_count_is_36(self):
-        """Face oval should have exactly 36 landmark indices."""
-        assert len(FACE_OVAL_INDICES) == 36
-
-    def test_all_in_valid_range(self):
-        """All indices should be in the valid MediaPipe range [0, 477]."""
-        assert all(0 <= idx <= 477 for idx in FACE_OVAL_INDICES)
-
-    def test_no_duplicates(self):
-        """Face oval indices should not contain duplicates."""
-        assert len(FACE_OVAL_INDICES) == len(set(FACE_OVAL_INDICES))
 
 
 class TestGetFaceOvalPolygon:
