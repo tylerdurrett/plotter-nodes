@@ -112,11 +112,17 @@ def make_contact_sheet(images: dict[str, np.ndarray], columns: int = 4) -> np.nd
         x = col * cell_width
         y = row * total_cell_height + label_height
 
-        # Resize image to fit cell
-        resized = cv2.resize(img, (cell_width, cell_height))
+        # Resize image to fit cell while preserving aspect ratio
+        img_h, img_w = img.shape[:2]
+        scale = min(cell_width / img_w, cell_height / img_h)
+        new_w = int(img_w * scale)
+        new_h = int(img_h * scale)
+        resized = cv2.resize(img, (new_w, new_h))
 
-        # Place image in canvas
-        canvas[y : y + cell_height, x : x + cell_width] = resized
+        # Center the resized image within the cell (white padding)
+        pad_x = (cell_width - new_w) // 2
+        pad_y = (cell_height - new_h) // 2
+        canvas[y + pad_y : y + pad_y + new_h, x + pad_x : x + pad_x + new_w] = resized
 
         # Add label above image
         text_y = row * total_cell_height + 20  # Position text in label area
