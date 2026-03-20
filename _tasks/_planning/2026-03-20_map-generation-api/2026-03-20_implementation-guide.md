@@ -236,8 +236,8 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 3.2 Implement Pipeline Dependency Resolver
 
-- [ ] Create `src/portrait_map_lab/server/resolver.py`
-- [ ] Define the dependency table as a constant mapping map keys to required pipeline sets:
+- [x] Create `src/portrait_map_lab/server/resolver.py`
+- [x] Define the dependency table as a constant mapping map keys to required pipeline sets:
   ```
   density_target → {features, contour, density}
   importance     → {features, contour, density}
@@ -247,17 +247,24 @@ pyproject.toml                  # (modified) Add [api] optional dependency
   complexity     → {complexity}
   flow_speed     → {complexity, contour, flow}
   ```
-- [ ] Implement `resolve_pipelines(requested_maps: list[str]) -> set[str]` that unions pipeline sets for all requested maps
-- [ ] Implement `run_resolved_pipelines(image, pipelines: set[str], configs) -> dict[str, np.ndarray]` that:
+- [x] Implement `resolve_pipelines(requested_maps: list[str]) -> set[str]` that unions pipeline sets for all requested maps
+- [x] Implement `run_resolved_pipelines(image, pipelines: set[str], configs) -> dict[str, np.ndarray]` that:
   - Detects landmarks once (if any pipeline needs them)
   - Calls individual pipeline functions in dependency order with shared landmarks
   - Collects the result arrays keyed by map name
   - Only computes LIC if not needed (the API doesn't export it)
-- [ ] Write thorough unit tests for the resolver:
-  - Single map requests resolve to correct pipeline set
+  - Note: Signature is `run_resolved_pipelines(image, landmarks, pipelines, *, ...configs...)` — landmarks are accepted as a parameter (pre-computed by the caller) rather than detected internally, keeping landmark detection as the caller's responsibility for flexibility
+  - Note: Returns `dict[str, Any]` mapping pipeline name → result object (not map name → array); extracting individual map arrays is the caller's responsibility, matching how `build_export_bundle` already works via `_resolve_attr`
+  - Note: Added `_PIPELINE_DEPS` inter-pipeline dependency table and dependency closure validation at the top of `run_resolved_pipelines` — raises `ValueError` with a clear message if the pipeline set is invalid (e.g., `{"density"}` without `{"features", "contour"}`), guarding against misuse by direct callers who bypass `resolve_pipelines`
+- [x] Write thorough unit tests for the resolver:
+  - Single map requests resolve to correct pipeline set (7 tests, one per map key)
   - Combined requests union correctly (e.g., `["density_target", "flow_x"]` → `{features, contour, density, flow}`)
   - Invalid map keys raise ValueError
   - Empty list resolves to all pipelines
+  - Dependency table consistency checks (all map keys present, all pipeline names valid)
+  - Dependency closure validation (invalid sets rejected, resolver-produced sets accepted)
+  - Pipeline function call verification (correct functions called/skipped, configs forwarded, complexity result passed to flow)
+  - Note: 26 tests total across 3 test classes (TestResolvePipelines, TestDependencyClosureValidation, TestRunResolvedPipelines); all 444 tests pass (3 skipped), no regressions
 
 **Acceptance Criteria:**
 - `resolve_pipelines(["flow_x"])` returns `{"contour", "flow"}`
