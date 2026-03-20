@@ -182,10 +182,13 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 2.4 Implement Map File Serving
 
-- [ ] Add `GET /api/maps/{session_id}/manifest.json` route — serve manifest from cache dir
-- [ ] Add `GET /api/maps/{session_id}/{filename}` route — serve `.bin` files via `FileResponse`
-- [ ] Return 404 if session or file doesn't exist
-- [ ] Write integration test: generate maps, then fetch each `.bin` URL from the response and verify it returns valid float32 data with correct byte length (`width * height * 4`)
+- [x] Add `GET /api/maps/{session_id}/manifest.json` route — serve manifest from cache dir
+  - Note: Uses `Response(content=..., media_type="application/json")` to serve raw bytes directly, avoiding unnecessary JSON parse+reserialize round-trip
+- [x] Add `GET /api/maps/{session_id}/{filename}` route — serve `.bin` files via `FileResponse`
+- [x] Return 404 if session or file doesn't exist
+  - Note: Path-traversal prevention guards both `session_id` (must stay inside cache root) and `filename` (must stay inside session dir) via `Path.resolve()` + `is_relative_to()` checks
+- [x] Write integration test: generate maps, then fetch each `.bin` URL from the response and verify it returns valid float32 data with correct byte length (`width * height * 4`)
+  - Note: 7 tests total (manifest, single bin, all bins, nonexistent session, nonexistent file, path-traversal on session_id, path-traversal on filename); shared `_generate_session` async context manager extracts common generate-then-fetch boilerplate
 
 **Acceptance Criteria:**
 - Fetching `{base_url}/manifest.json` returns the same manifest as the generate response

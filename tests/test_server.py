@@ -620,3 +620,106 @@ class TestConfigMergeHelpers:
         assert cfg.metric == "laplacian"
         assert cfg.sigma == 5.0
         assert cfg.normalize_percentile == 99.0  # default
+
+
+# ---------------------------------------------------------------------------
+# Map file serving tests (Phase 2.4)
+# ---------------------------------------------------------------------------
+
+
+@contextlib.asynccontextmanager
+async def _generate_session(
+    client: httpx.AsyncClient, cache_dir: Path
+):
+    """Generate a mocked session and yield its response data.
+
+    Keeps the ``ServerConfig`` mock active so file-serving endpoints resolve
+    to the correct *cache_dir*.
+    """
+    with _mock_pipeline_stack(cache_dir=cache_dir):
+        gen = await client.post(
+            "/api/generate",
+            content=json.dumps({"image_path": "/some/test.jpg"}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert gen.status_code == 200
+        yield gen.json()
+
+
+class TestMapFileServing:
+    """Verify the map file serving endpoints."""
+
+    @pytest.mark.anyio
+    async def test_serve_manifest_json(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Fetching manifest.json should return the same manifest as the generate response."""
+        async with _generate_session(client, tmp_path / "cache") as data:
+            response = await client.get(f"{data['base_url']}/manifest.json")
+        assert response.status_code == 200
+        assert response.json() == data["manifest"]
+
+    @pytest.mark.anyio
+    async def test_serve_bin_file(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Fetching a .bin file should return valid float32 data with correct byte length."""
+        async with _generate_session(client, tmp_path / "cache") as data:
+            manifest = data["manifest"]
+            width, height = manifest["width"], manifest["height"]
+            map_entry = manifest["maps"][0]
+            response = await client.get(f"{data['base_url']}/{map_entry['filename']}")
+        assert response.status_code == 200
+
+        raw = response.content
+        assert len(raw) == height * width * 4
+
+        array = np.frombuffer(raw, dtype=np.float32)
+        assert array.shape == (height * width,)
+
+    @pytest.mark.anyio
+    async def test_fetch_all_bin_urls(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """All .bin files listed in the manifest should be fetchable."""
+        async with _generate_session(client, tmp_path / "cache") as data:
+            manifest = data["manifest"]
+            expected_bytes = manifest["height"] * manifest["width"] * 4
+            for map_entry in manifest["maps"]:
+                response = await client.get(f"{data['base_url']}/{map_entry['filename']}")
+                assert response.status_code == 200, f"Failed for {map_entry['filename']}"
+                assert len(response.content) == expected_bytes
+
+    @pytest.mark.anyio
+    async def test_nonexistent_session_returns_404(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """A non-existent session ID should return 404."""
+        response = await client.get("/api/maps/nonexistent-id/manifest.json")
+        assert response.status_code == 404
+
+    @pytest.mark.anyio
+    async def test_nonexistent_file_returns_404(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """A non-existent filename within a valid session should return 404."""
+        async with _generate_session(client, tmp_path / "cache") as data:
+            response = await client.get(f"{data['base_url']}/nonexistent.bin")
+        assert response.status_code == 404
+
+    @pytest.mark.anyio
+    async def test_path_traversal_session_id_returns_404(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """Path traversal in session_id should return 404."""
+        response = await client.get("/api/maps/../../etc/manifest.json")
+        assert response.status_code in (404, 422)
+
+    @pytest.mark.anyio
+    async def test_path_traversal_filename_returns_404(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Path traversal in filename should return 404."""
+        async with _generate_session(client, tmp_path / "cache") as data:
+            response = await client.get(f"{data['base_url']}/../../../etc/passwd")
+        assert response.status_code == 404

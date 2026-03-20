@@ -10,7 +10,8 @@ import threading
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile
+from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from portrait_map_lab.export import _manifest_to_dict, build_export_bundle
@@ -189,3 +190,44 @@ def generate_maps(
     finally:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
+
+
+def _resolve_session_file(session_id: str, filename: str) -> Path:
+    """Resolve and validate a file path within a session cache directory.
+
+    Raises :class:`~fastapi.HTTPException` with 404 if the session directory
+    or the requested file does not exist.  Path-traversal attempts (e.g.
+    ``../`` in *session_id* or *filename*) are rejected.
+    """
+    config = ServerConfig()
+    cache_root = config.cache_dir.resolve()
+    session_dir = (cache_root / session_id).resolve()
+
+    # Guard against path traversal in session_id (e.g. "../../etc")
+    if not session_dir.is_relative_to(cache_root):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    file_path = (session_dir / filename).resolve()
+
+    # Guard against path traversal in filename (e.g. "../secret.txt")
+    if not file_path.is_relative_to(session_dir):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return file_path
+
+
+@router.get("/maps/{session_id}/manifest.json")
+def get_session_manifest(session_id: str) -> Response:
+    """Serve the manifest JSON for a cached session."""
+    file_path = _resolve_session_file(session_id, "manifest.json")
+    return Response(content=file_path.read_bytes(), media_type="application/json")
+
+
+@router.get("/maps/{session_id}/{filename}")
+def get_session_file(session_id: str, filename: str) -> FileResponse:
+    """Serve a binary map file from a cached session."""
+    file_path = _resolve_session_file(session_id, filename)
+    return FileResponse(file_path, media_type="application/octet-stream")
