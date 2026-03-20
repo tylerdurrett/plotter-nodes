@@ -222,11 +222,12 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 3.1 Promote Private Pipeline Helpers to Public
 
-- [ ] Rename `_run_feature_pipeline_with_landmarks` to `run_feature_pipeline_with_landmarks` in `pipelines.py`
-- [ ] Rename `_run_contour_pipeline_with_landmarks` to `run_contour_pipeline_with_landmarks` in `pipelines.py`
-- [ ] Update `run_all_pipelines` to call the renamed functions
-- [ ] Add both to `__init__.py` exports
-- [ ] Run existing test suite to verify nothing breaks
+- [x] Rename `_run_feature_pipeline_with_landmarks` to `run_feature_pipeline_with_landmarks` in `pipelines.py`
+- [x] Rename `_run_contour_pipeline_with_landmarks` to `run_contour_pipeline_with_landmarks` in `pipelines.py`
+- [x] Update `run_all_pipelines` to call the renamed functions
+- [x] Add both to `__init__.py` exports
+- [x] Run existing test suite to verify nothing breaks
+  - Note: All 418 tests pass (3 skipped), no regressions. Docstrings updated to remove "Internal helper" language.
 
 **Acceptance Criteria:**
 - Both functions are importable from `portrait_map_lab`

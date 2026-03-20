@@ -1010,13 +1010,14 @@ def save_flow_outputs(
     logger.info("All flow outputs saved successfully")
 
 
-def _run_feature_pipeline_with_landmarks(
+def run_feature_pipeline_with_landmarks(
     landmarks: LandmarkResult,
     config: PipelineConfig | None = None,
 ) -> PipelineResult:
     """Run feature pipeline with pre-computed landmarks.
 
-    Internal helper to avoid duplicate landmark detection.
+    Accepts pre-computed landmarks to avoid duplicate landmark detection
+    when multiple pipelines share the same face detection result.
     """
     if config is None:
         config = PipelineConfig()
@@ -1069,14 +1070,15 @@ def _run_feature_pipeline_with_landmarks(
     )
 
 
-def _run_contour_pipeline_with_landmarks(
+def run_contour_pipeline_with_landmarks(
     landmarks: LandmarkResult,
     config: ContourConfig | None = None,
     image: np.ndarray | None = None,
 ) -> ContourResult:
     """Run contour pipeline with pre-computed landmarks.
 
-    Internal helper to avoid duplicate landmark detection.
+    Accepts pre-computed landmarks to avoid duplicate landmark detection
+    when multiple pipelines share the same face detection result.
     For segmentation methods, the *image* parameter is required.
     """
     if config is None:
@@ -1211,12 +1213,12 @@ def run_all_pipelines(
 
     # Step 2: Run feature pipeline with shared landmarks
     logger.info("\n--- Stage 1: Feature Distance Pipeline ---")
-    feature_result = _run_feature_pipeline_with_landmarks(landmarks, feature_config)
+    feature_result = run_feature_pipeline_with_landmarks(landmarks, feature_config)
     logger.info("Feature pipeline completed")
 
     # Step 3: Run contour pipeline with shared landmarks
     logger.info("\n--- Stage 2: Contour Pipeline ---")
-    contour_result = _run_contour_pipeline_with_landmarks(landmarks, contour_config, image=image)
+    contour_result = run_contour_pipeline_with_landmarks(landmarks, contour_config, image=image)
     logger.info("Contour pipeline completed")
 
     # Step 4: Run density pipeline using results from features and contour
