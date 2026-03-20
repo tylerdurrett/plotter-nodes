@@ -116,6 +116,8 @@ class SessionCache:
 
         expired_ids: list[str] = []
         for sid, info in snapshot:
+            if info.persistent:
+                continue
             age = self._session_age_seconds(sid, info, now)
             if age is not None and age > self._ttl_seconds:
                 expired_ids.append(sid)

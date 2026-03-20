@@ -225,12 +225,21 @@ def generate_maps(
             session_id, len(bundle.binary_maps), session_dir,
         )
 
+        # --- persist to output directory if requested ---
+        if body.persist:
+            output_dir = Path("output") / body.persist / "export"
+            shutil.copytree(session_dir, output_dir, dirs_exist_ok=True)
+            logger.info(
+                "Session %s: persisted to %s", session_id, output_dir,
+            )
+
         # Register session metadata in the cache.
         info = SessionInfo(
             session_id=session_id,
             source_image=manifest_dict.get("source_image", source_name),
             created_at=manifest_dict.get("created_at", ""),
             map_keys=[m["key"] for m in manifest_dict.get("maps", [])],
+            persistent=bool(body.persist),
         )
         cache.register(info)
 

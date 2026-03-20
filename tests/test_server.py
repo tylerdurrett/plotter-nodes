@@ -1302,3 +1302,224 @@ class TestCacheLifecycle:
         assert len(sessions) == 1
         assert sessions[0]["session_id"] == "recovered-session"
         assert sessions[0]["source_image"] == "portrait.jpg"
+
+
+# ---------------------------------------------------------------------------
+# Persist parameter tests (Phase 5.1)
+# ---------------------------------------------------------------------------
+
+
+class TestPersistParameter:
+    """Verify the ``persist`` parameter on ``POST /api/generate``."""
+
+    # -- Schema validation ---------------------------------------------------
+
+    def test_valid_persist_values_accepted(self) -> None:
+        """Alphanumeric, hyphens, and underscores should be accepted."""
+        for value in ("my-portrait", "test_123", "AbCdEf", "a"):
+            req = GenerateRequest(persist=value)
+            assert req.persist == value
+
+    def test_persist_none_accepted(self) -> None:
+        """Omitting persist should default to None."""
+        req = GenerateRequest()
+        assert req.persist is None
+
+    def test_persist_path_traversal_rejected(self) -> None:
+        """Path traversal attempts should be rejected by the validator."""
+        for value in ("../../etc", "../secret", "a/b", "a\\b"):
+            with pytest.raises(ValidationError, match="persist"):
+                GenerateRequest(persist=value)
+
+    def test_persist_special_chars_rejected(self) -> None:
+        """Special characters should be rejected."""
+        for value in ("hello world", "test!", "a@b", "a.b", ""):
+            with pytest.raises(ValidationError, match="persist"):
+                GenerateRequest(persist=value)
+
+    # -- Integration: files created at output path ---------------------------
+
+    @pytest.mark.anyio
+    async def test_persist_creates_output_files(
+        self, client: httpx.AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Persist should copy cache files to ``output/{persist}/export/``."""
+        output_root = tmp_path / "output"
+        # Monkeypatch Path("output") resolution — the route uses a relative
+        # path, so we change the working directory to tmp_path so that
+        # "output/{persist}/export" resolves inside tmp_path.
+        monkeypatch.chdir(tmp_path)
+
+        with _mock_pipeline_stack():
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "persist": "my-portrait",
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        persist_dir = output_root / "my-portrait" / "export"
+        assert persist_dir.is_dir()
+        assert (persist_dir / "manifest.json").is_file()
+        assert (persist_dir / "density_target.bin").is_file()
+
+    @pytest.mark.anyio
+    async def test_persist_contents_match_cache(
+        self, client: httpx.AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Persisted files should be byte-identical to the cache directory."""
+        monkeypatch.chdir(tmp_path)
+        cache_dir = tmp_path / "cache"
+
+        with _mock_pipeline_stack():
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "persist": "check-copy",
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        session_id = response.json()["session_id"]
+        session_dir = cache_dir / session_id
+        persist_dir = tmp_path / "output" / "check-copy" / "export"
+
+        for cache_file in session_dir.iterdir():
+            persist_file = persist_dir / cache_file.name
+            assert persist_file.exists(), f"Missing: {cache_file.name}"
+            assert cache_file.read_bytes() == persist_file.read_bytes()
+
+    @pytest.mark.anyio
+    async def test_persist_manifest_is_plotter_loadable(
+        self, client: httpx.AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The persisted manifest should have all fields required by the plotter."""
+        monkeypatch.chdir(tmp_path)
+
+        with _mock_pipeline_stack():
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "persist": "plotter-test",
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        persist_dir = tmp_path / "output" / "plotter-test" / "export"
+        manifest = json.loads((persist_dir / "manifest.json").read_text())
+
+        # Top-level fields required by parseManifest()
+        assert "version" in manifest
+        assert "source_image" in manifest
+        assert "width" in manifest
+        assert "height" in manifest
+        assert "created_at" in manifest
+        assert "maps" in manifest
+        # Map entry structure
+        for entry in manifest["maps"]:
+            assert "filename" in entry
+            assert "key" in entry
+            assert "dtype" in entry
+            assert "shape" in entry
+            assert "value_range" in entry
+            assert "description" in entry
+
+    # -- Persistent sessions exempt from TTL ---------------------------------
+
+    def test_persistent_session_exempt_from_ttl(self, tmp_path: Path) -> None:
+        """Persistent sessions should NOT be cleaned up by ``cleanup_expired``."""
+        config = ServerConfig(cache_dir=tmp_path / "cache", session_ttl_seconds=1)
+        cache = SessionCache(config)
+
+        # Create an old but persistent session
+        old_time = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
+        from portrait_map_lab.server.schemas import SessionInfo as _SI
+
+        info = _SI(
+            session_id="persistent-session",
+            source_image="test.jpg",
+            created_at=old_time,
+            map_keys=["density_target"],
+            persistent=True,
+        )
+        cache.register(info)
+        session_dir = cache.get_path("persistent-session")
+        session_dir.mkdir(parents=True)
+        (session_dir / "density_target.bin").write_bytes(b"\x00" * 16)
+
+        removed = cache.cleanup_expired()
+        assert removed == 0
+        assert session_dir.exists()
+        assert len(cache.list_sessions()) == 1
+
+    def test_non_persistent_session_still_cleaned_up(self, tmp_path: Path) -> None:
+        """Non-persistent expired sessions should still be cleaned up."""
+        config = ServerConfig(cache_dir=tmp_path / "cache", session_ttl_seconds=1)
+        cache = SessionCache(config)
+
+        old_time = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
+        from portrait_map_lab.server.schemas import SessionInfo as _SI
+
+        info = _SI(
+            session_id="ephemeral-session",
+            source_image="test.jpg",
+            created_at=old_time,
+            map_keys=["density_target"],
+            persistent=False,
+        )
+        cache.register(info)
+        session_dir = cache.get_path("ephemeral-session")
+        session_dir.mkdir(parents=True)
+        (session_dir / "density_target.bin").write_bytes(b"\x00" * 16)
+
+        removed = cache.cleanup_expired()
+        assert removed == 1
+        assert not session_dir.exists()
+
+    @pytest.mark.anyio
+    async def test_persist_marks_session_persistent(
+        self, client: httpx.AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sessions created with ``persist`` should be marked persistent in the cache."""
+        monkeypatch.chdir(tmp_path)
+
+        with _mock_pipeline_stack():
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "persist": "mark-test",
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        cache: SessionCache = client._transport.app.state.cache  # type: ignore[attr-defined]
+        sessions = cache.list_sessions()
+        assert len(sessions) == 1
+        assert sessions[0].persistent is True
+
+    @pytest.mark.anyio
+    async def test_no_persist_session_not_persistent(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Sessions created without ``persist`` should NOT be marked persistent."""
+        with _mock_pipeline_stack():
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        cache: SessionCache = client._transport.app.state.cache  # type: ignore[attr-defined]
+        sessions = cache.list_sessions()
+        assert len(sessions) == 1
+        assert sessions[0].persistent is False

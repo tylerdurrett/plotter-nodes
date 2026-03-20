@@ -397,15 +397,20 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 5.1 Implement Persist Parameter
 
-- [ ] When `persist` is specified in the generate request:
+- [x] When `persist` is specified in the generate request:
   - Sanitize the value: allow only `[a-zA-Z0-9_-]` characters, reject anything else with 422
   - Copy the session's cache directory contents to `output/{persist}/export/`
   - Exempt the session from TTL cleanup (or mark it as persistent in the registry)
-- [ ] Write tests:
+  - Note: Validation uses Pydantic's built-in `Field(pattern=...)` constraint rather than a manual `re.fullmatch` validator — more idiomatic, eliminates `re` import
+  - Note: Copy uses `shutil.copytree(session_dir, output_dir, dirs_exist_ok=True)` for robustness instead of manual `iterdir` + `copy2` loop
+  - Note: `persistent: bool = False` field added to `SessionInfo` — serves dual purpose: informs API consumers and controls TTL exemption in `cleanup_expired()`
+  - Note: Persistent flag is not recovered on server restart (recovered sessions default to `persistent=False`); this is acceptable since the `output/` copy is the durable artifact and cache sessions are ephemeral
+- [x] Write tests:
   - Persist creates files at the expected output path
   - Persisted bundle has identical contents to the cache directory
   - Path traversal attempts (e.g., `"../../etc"`) are rejected with 422
   - The persisted bundle is loadable by the plotter (manifest format is correct)
+  - Note: 11 tests total in `TestPersistParameter` class: 4 schema validation (valid values, None, path traversal, special chars), 3 integration (output files, contents match, plotter-loadable manifest), 2 TTL exemption (persistent exempt, non-persistent cleaned up), 2 flag verification (persist marks persistent, no-persist not persistent); all 501 tests pass (3 skipped), no regressions
 
 **Acceptance Criteria:**
 - `persist: "my-portrait"` writes to `output/my-portrait/export/`

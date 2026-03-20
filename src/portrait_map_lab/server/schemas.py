@@ -6,7 +6,7 @@ optional so clients only need to send overrides.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from portrait_map_lab.export import _MAP_DEFINITIONS
 from portrait_map_lab.models import (
@@ -175,7 +175,7 @@ class GenerateRequest(BaseModel):
 
     image_path: str | None = None
     maps: list[str] | None = None
-    persist: str | None = None
+    persist: str | None = Field(None, pattern=r"^[a-zA-Z0-9_-]+$")
     config: GenerateConfigSchema | None = None
 
     @field_validator("maps")
@@ -208,6 +208,7 @@ class SessionInfo(BaseModel):
     source_image: str
     created_at: str
     map_keys: list[str]
+    persistent: bool = False
 
 
 class MapKeyInfo(BaseModel):
