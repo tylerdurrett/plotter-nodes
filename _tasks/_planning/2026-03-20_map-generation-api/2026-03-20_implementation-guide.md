@@ -152,19 +152,25 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 2.3 Implement `POST /api/generate` — Full Pipeline Path
 
-- [ ] Add `POST /api/generate` route in `routes.py`
-- [ ] Handle dual image input: accept `image_path` (JSON body) or multipart file upload
+- [x] Add `POST /api/generate` route in `routes.py`
+- [x] Handle dual image input: accept `image_path` (JSON body) or multipart file upload
   - For `image_path`: validate path exists and is loadable via `load_image()`
   - For file upload: write to temp file, load via `load_image()`, clean up after processing
-- [ ] Validate image has a detectable face (call `detect_landmarks()`); return 422 with `"No face detected in image"` if not
-- [ ] Build config objects from request schema, merging overrides onto defaults
-- [ ] Call `run_all_pipelines()` with the constructed configs
-- [ ] Call `build_export_bundle()` on the result to get `ExportBundle`
-- [ ] Generate a UUID4 session ID
-- [ ] Write `.bin` files and `manifest.json` to `.cache/api/{session_id}/`
-- [ ] Return `GenerateResponse` with full manifest (via `_manifest_to_dict()`) and `base_url`
-- [ ] Define the endpoint as a regular function (not `async def`) so FastAPI runs it in a threadpool
-- [ ] Add a `threading.Lock` around pipeline execution to serialize concurrent requests
+  - Note: Multipart parsing uses `_parse_request` async dependency that inspects `Content-Type`; multipart sends `image` file and optional `request_body` JSON string in form field; uses `shutil.copyfileobj` for streaming file writes
+  - Note: `starlette.datastructures.UploadFile` type check required alongside `fastapi.UploadFile` because form parsing returns the Starlette type
+- [x] Validate image has a detectable face (call `detect_landmarks()`); return 422 with `"No face detected in image"` if not
+  - Note: `detect_landmarks` called before acquiring `_pipeline_lock` for fast-fail; `run_all_pipelines` calls it again internally (minor redundancy ~1-2s, acceptable tradeoff to avoid blocking the lock with invalid images)
+- [x] Build config objects from request schema, merging overrides onto defaults
+  - Note: Config merge helpers (`build_pipeline_config`, `build_contour_config`, etc.) added to `schemas.py` using a generic `_merge_onto` helper that applies non-None scalar fields from Pydantic models onto mutable dataclasses, with specialized helpers for nested sub-objects (remap, luminance, etf)
+  - Note: Complexity is always enabled (`ComplexityConfig()` default) so all 7 maps are produced
+- [x] Call `run_all_pipelines()` with the constructed configs
+- [x] Call `build_export_bundle()` on the result to get `ExportBundle`
+- [x] Generate a UUID4 session ID
+- [x] Write `.bin` files and `manifest.json` to `.cache/api/{session_id}/`
+- [x] Return `GenerateResponse` with full manifest (via `_manifest_to_dict()`) and `base_url`
+- [x] Define the endpoint as a regular function (not `async def`) so FastAPI runs it in a threadpool
+- [x] Add a `threading.Lock` around pipeline execution to serialize concurrent requests
+- [x] Write tests: 8 endpoint tests (valid path, invalid path, no face, no image, cache files, manifest structure, file upload, config overrides) + 8 config merge helper tests (all 41 tests pass)
 
 **Acceptance Criteria:**
 - `POST /api/generate` with a valid `image_path` returns 200 with a manifest containing map entries

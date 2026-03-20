@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 import sys
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import httpx
+import numpy as np
 import pytest
 
+from portrait_map_lab.export import ExportBundle, _manifest_to_dict
+from portrait_map_lab.models import ExportManifest, ExportMapEntry, LandmarkResult
 from portrait_map_lab.server.config import ServerConfig
 
 # ---------------------------------------------------------------------------
@@ -274,3 +279,344 @@ class TestMapKeysEndpoint:
         assert by_key["density_target"]["value_range"] == [0.0, 1.0]
         assert "flow_x" in by_key
         assert by_key["flow_x"]["value_range"] == [-1.0, 1.0]
+
+
+# ---------------------------------------------------------------------------
+# Generate endpoint tests (Phase 2.3)
+# ---------------------------------------------------------------------------
+
+
+def _fake_landmarks() -> LandmarkResult:
+    """Build a minimal ``LandmarkResult`` for test mocks."""
+    return LandmarkResult(
+        landmarks=np.zeros((478, 2), dtype=np.float32),
+        image_shape=(100, 100),
+        confidence=0.99,
+    )
+
+
+def _fake_export_bundle() -> ExportBundle:
+    """Build a minimal ``ExportBundle`` for test mocks."""
+    entry = ExportMapEntry(
+        filename="density_target.bin",
+        key="density_target",
+        dtype="float32",
+        shape=(100, 100),
+        value_range=(0.0, 1.0),
+        description="test density",
+    )
+    manifest = ExportManifest(
+        version=1,
+        source_image="test.jpg",
+        width=100,
+        height=100,
+        created_at="2026-03-20T00:00:00+00:00",
+        maps=(entry,),
+    )
+    return ExportBundle(
+        manifest=manifest,
+        binary_maps={"density_target": np.zeros((100, 100), dtype=np.float32).tobytes()},
+        png_files={},
+    )
+
+
+def _fake_manifest_dict() -> dict:
+    """Return a manifest dict derived from ``_fake_export_bundle``."""
+    return _manifest_to_dict(_fake_export_bundle().manifest)
+
+
+# Patch targets — these are the module paths where routes.py imports them.
+_PATCH_LOAD = "portrait_map_lab.server.routes.load_image"
+_PATCH_DETECT = "portrait_map_lab.server.routes.detect_landmarks"
+_PATCH_RUN = "portrait_map_lab.server.routes.run_all_pipelines"
+_PATCH_BUNDLE = "portrait_map_lab.server.routes.build_export_bundle"
+_PATCH_MANIFEST = "portrait_map_lab.server.routes._manifest_to_dict"
+
+
+@contextlib.contextmanager
+def _mock_pipeline_stack(cache_dir: Path | None = None):
+    """Context manager that mocks the entire pipeline for generate tests."""
+    fake_image = np.zeros((100, 100, 3), dtype=np.uint8)
+    sentinel_result = MagicMock(name="ComposedResult")
+    bundle = _fake_export_bundle()
+    manifest_dict = _fake_manifest_dict()
+
+    patches = [
+        patch(_PATCH_LOAD, return_value=fake_image),
+        patch(_PATCH_DETECT, return_value=_fake_landmarks()),
+        patch(_PATCH_RUN, return_value=sentinel_result),
+        patch(_PATCH_BUNDLE, return_value=bundle),
+        patch(_PATCH_MANIFEST, return_value=manifest_dict),
+    ]
+    if cache_dir is not None:
+        patches.append(
+            patch(
+                "portrait_map_lab.server.routes.ServerConfig",
+                return_value=ServerConfig(cache_dir=cache_dir),
+            )
+        )
+
+    with contextlib.ExitStack() as stack:
+        mocks = [stack.enter_context(p) for p in patches]
+        yield mocks
+
+
+class TestGenerateEndpoint:
+    """Verify the ``POST /api/generate`` endpoint."""
+
+    @pytest.mark.anyio
+    async def test_generate_with_valid_image_path(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """A valid image_path should return 200 with session_id, manifest, base_url."""
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert "session_id" in data
+        assert "manifest" in data
+        assert "base_url" in data
+        assert data["base_url"].startswith("/api/maps/")
+
+    @pytest.mark.anyio
+    async def test_generate_invalid_image_path(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """A non-existent image path should return 422."""
+        with patch(_PATCH_LOAD, side_effect=FileNotFoundError("not found")):
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/nonexistent/image.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 422
+        detail = response.json()["detail"].lower()
+        assert "not found" in detail or "image" in detail
+
+    @pytest.mark.anyio
+    async def test_generate_no_face_detected(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """An image with no detectable face should return 422."""
+        fake_image = np.zeros((100, 100, 3), dtype=np.uint8)
+        with (
+            patch(_PATCH_LOAD, return_value=fake_image),
+            patch(_PATCH_DETECT, side_effect=ValueError("No face detected")),
+        ):
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 422
+        assert "no face detected" in response.json()["detail"].lower()
+
+    @pytest.mark.anyio
+    async def test_generate_no_image_source(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """An empty request with no image should return 422."""
+        response = await client.post(
+            "/api/generate",
+            content=json.dumps({}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 422
+        assert "no image" in response.json()["detail"].lower()
+
+    @pytest.mark.anyio
+    async def test_generate_creates_cache_files(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Generate should write .bin files and manifest.json to the cache dir."""
+        cache_dir = tmp_path / "cache"
+        with _mock_pipeline_stack(cache_dir=cache_dir):
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+        session_id = response.json()["session_id"]
+        session_dir = cache_dir / session_id
+        assert session_dir.is_dir()
+        assert (session_dir / "manifest.json").is_file()
+        assert (session_dir / "density_target.bin").is_file()
+
+        # Verify manifest JSON is valid
+        manifest = json.loads((session_dir / "manifest.json").read_text())
+        assert manifest["version"] == 1
+        assert manifest["width"] == 100
+        assert manifest["height"] == 100
+
+    @pytest.mark.anyio
+    async def test_generate_manifest_structure(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """The manifest in the response should have all required plotter fields."""
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        manifest = response.json()["manifest"]
+        # Top-level fields required by the plotter's parseManifest()
+        assert "version" in manifest
+        assert "source_image" in manifest
+        assert "width" in manifest
+        assert "height" in manifest
+        assert "created_at" in manifest
+        assert "maps" in manifest
+        # Map entry structure
+        map_entry = manifest["maps"][0]
+        assert "filename" in map_entry
+        assert "key" in map_entry
+        assert "dtype" in map_entry
+        assert "shape" in map_entry
+        assert "value_range" in map_entry
+        assert "description" in map_entry
+
+    @pytest.mark.anyio
+    async def test_generate_with_file_upload(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Multipart file upload should also produce a valid response."""
+        # Create a small dummy JPEG-like file
+        fake_bytes = b"\xff\xd8\xff" + b"\x00" * 100
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+            response = await client.post(
+                "/api/generate",
+                files={"image": ("test.jpg", fake_bytes, "image/jpeg")},
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert "session_id" in data
+        assert data["base_url"].startswith("/api/maps/")
+
+    @pytest.mark.anyio
+    async def test_generate_with_config_overrides(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Config overrides should be propagated to run_all_pipelines."""
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "config": {"density": {"gamma": 2.0}},
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Config merge helper tests (Phase 2.3)
+# ---------------------------------------------------------------------------
+
+from portrait_map_lab.server.schemas import (  # noqa: E402
+    build_complexity_config,
+    build_compose_config,
+    build_contour_config,
+    build_flow_config,
+    build_flow_speed_config,
+    build_pipeline_config,
+)
+
+
+class TestConfigMergeHelpers:
+    """Verify that schema-to-dataclass merge helpers work correctly."""
+
+    def test_none_schema_returns_none(self) -> None:
+        """All builders should return None when schema is None."""
+        assert build_pipeline_config(None) is None
+        assert build_contour_config(None) is None
+        assert build_compose_config(None) is None
+        assert build_complexity_config(None) is None
+        assert build_flow_config(None) is None
+        assert build_flow_speed_config(None) is None
+
+    def test_empty_schema_returns_defaults(self) -> None:
+        """An empty schema should produce a dataclass with default values."""
+        from portrait_map_lab.models import PipelineConfig
+        from portrait_map_lab.server.schemas import FeaturesConfigSchema
+
+        cfg = build_pipeline_config(FeaturesConfigSchema())
+        default = PipelineConfig()
+        assert cfg.weights == default.weights
+        assert cfg.remap.radius == default.remap.radius
+
+    def test_scalar_override(self) -> None:
+        """A non-None scalar should override the default."""
+        from portrait_map_lab.server.schemas import DensityConfigSchema
+
+        cfg = build_compose_config(DensityConfigSchema(gamma=2.5))
+        assert cfg.gamma == 2.5
+        # Other fields keep defaults
+        assert cfg.feature_weight == 0.6
+
+    def test_nested_remap_override(self) -> None:
+        """Nested remap overrides should merge onto the default RemapConfig."""
+        from portrait_map_lab.server.schemas import (
+            ContourConfigSchema,
+            RemapConfigSchema,
+        )
+
+        cfg = build_contour_config(
+            ContourConfigSchema(remap=RemapConfigSchema(radius=300.0))
+        )
+        assert cfg.remap.radius == 300.0
+        # Non-overridden remap fields keep defaults
+        assert cfg.remap.sigma == 80.0
+
+    def test_nested_etf_override(self) -> None:
+        """Nested ETF overrides should merge onto the default ETFConfig."""
+        from portrait_map_lab.server.schemas import (
+            ETFConfigSchema,
+            FlowConfigSchema,
+        )
+
+        cfg = build_flow_config(
+            FlowConfigSchema(etf=ETFConfigSchema(blur_sigma=5.0))
+        )
+        assert cfg.etf.blur_sigma == 5.0
+        assert cfg.etf.structure_sigma == 5.0  # default
+
+    def test_nested_luminance_override(self) -> None:
+        """Nested luminance overrides should merge onto the default LuminanceConfig."""
+        from portrait_map_lab.server.schemas import (
+            DensityConfigSchema,
+            LuminanceConfigSchema,
+        )
+
+        cfg = build_compose_config(
+            DensityConfigSchema(luminance=LuminanceConfigSchema(clip_limit=4.0))
+        )
+        assert cfg.luminance.clip_limit == 4.0
+        assert cfg.luminance.tile_size == 8  # default
+
+    def test_flow_speed_override(self) -> None:
+        """Flow speed overrides should apply correctly."""
+        from portrait_map_lab.server.schemas import FlowSpeedConfigSchema
+
+        cfg = build_flow_speed_config(
+            FlowSpeedConfigSchema(speed_min=0.1, speed_max=0.9)
+        )
+        assert cfg.speed_min == 0.1
+        assert cfg.speed_max == 0.9
+
+    def test_complexity_override(self) -> None:
+        """Complexity overrides should apply correctly."""
+        from portrait_map_lab.server.schemas import ComplexityConfigSchema
+
+        cfg = build_complexity_config(
+            ComplexityConfigSchema(metric="laplacian", sigma=5.0)
+        )
+        assert cfg.metric == "laplacian"
+        assert cfg.sigma == 5.0
+        assert cfg.normalize_percentile == 99.0  # default

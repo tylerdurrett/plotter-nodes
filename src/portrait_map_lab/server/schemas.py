@@ -9,6 +9,17 @@ from __future__ import annotations
 from pydantic import BaseModel, field_validator
 
 from portrait_map_lab.export import _MAP_DEFINITIONS
+from portrait_map_lab.models import (
+    ComplexityConfig,
+    ComposeConfig,
+    ContourConfig,
+    ETFConfig,
+    FlowConfig,
+    FlowSpeedConfig,
+    LuminanceConfig,
+    PipelineConfig,
+    RemapConfig,
+)
 
 __all__ = [
     "ComplexityConfigSchema",
@@ -26,6 +37,12 @@ __all__ = [
     "MapKeyInfo",
     "RemapConfigSchema",
     "VALID_MAP_KEYS",
+    "build_compose_config",
+    "build_complexity_config",
+    "build_contour_config",
+    "build_flow_config",
+    "build_flow_speed_config",
+    "build_pipeline_config",
 ]
 
 # Canonical set of valid map keys, derived from export definitions.
@@ -200,3 +217,115 @@ MAP_KEY_INFOS: list[MapKeyInfo] = [
     )
     for key, _attr_path, value_range, description in _MAP_DEFINITIONS
 ]
+
+
+# ---------------------------------------------------------------------------
+# Config merge helpers — Pydantic schema → pipeline dataclass
+# ---------------------------------------------------------------------------
+
+
+def _merge_onto(schema: BaseModel, target: object) -> None:
+    """Set non-None scalar fields from a Pydantic schema onto a dataclass."""
+    for name, value in schema:
+        if value is not None and not isinstance(value, BaseModel):
+            setattr(target, name, value)
+
+
+def _merge_remap(schema: RemapConfigSchema | None, target: RemapConfig) -> RemapConfig:
+    """Merge remap overrides onto a default ``RemapConfig``."""
+    if schema is not None:
+        _merge_onto(schema, target)
+    return target
+
+
+def _merge_luminance(
+    schema: LuminanceConfigSchema | None, target: LuminanceConfig
+) -> LuminanceConfig:
+    """Merge luminance overrides onto a default ``LuminanceConfig``."""
+    if schema is not None:
+        _merge_onto(schema, target)
+    return target
+
+
+def _merge_etf(schema: ETFConfigSchema | None, target: ETFConfig) -> ETFConfig:
+    """Merge ETF overrides onto a default ``ETFConfig``."""
+    if schema is not None:
+        _merge_onto(schema, target)
+    return target
+
+
+def build_pipeline_config(
+    schema: FeaturesConfigSchema | None,
+) -> PipelineConfig | None:
+    """Build a ``PipelineConfig`` from optional overrides.
+
+    Returns ``None`` when *schema* is ``None`` (use pipeline defaults).
+    """
+    if schema is None:
+        return None
+    cfg = PipelineConfig()
+    _merge_onto(schema, cfg)
+    if schema.remap is not None:
+        _merge_remap(schema.remap, cfg.remap)
+    return cfg
+
+
+def build_contour_config(
+    schema: ContourConfigSchema | None,
+) -> ContourConfig | None:
+    """Build a ``ContourConfig`` from optional overrides."""
+    if schema is None:
+        return None
+    cfg = ContourConfig()
+    _merge_onto(schema, cfg)
+    if schema.remap is not None:
+        _merge_remap(schema.remap, cfg.remap)
+    return cfg
+
+
+def build_compose_config(
+    schema: DensityConfigSchema | None,
+) -> ComposeConfig | None:
+    """Build a ``ComposeConfig`` from optional overrides."""
+    if schema is None:
+        return None
+    cfg = ComposeConfig()
+    _merge_onto(schema, cfg)
+    if schema.luminance is not None:
+        _merge_luminance(schema.luminance, cfg.luminance)
+    return cfg
+
+
+def build_complexity_config(
+    schema: ComplexityConfigSchema | None,
+) -> ComplexityConfig | None:
+    """Build a ``ComplexityConfig`` from optional overrides."""
+    if schema is None:
+        return None
+    cfg = ComplexityConfig()
+    _merge_onto(schema, cfg)
+    return cfg
+
+
+def build_flow_config(
+    schema: FlowConfigSchema | None,
+) -> FlowConfig | None:
+    """Build a ``FlowConfig`` from optional overrides."""
+    if schema is None:
+        return None
+    cfg = FlowConfig()
+    _merge_onto(schema, cfg)
+    if schema.etf is not None:
+        _merge_etf(schema.etf, cfg.etf)
+    return cfg
+
+
+def build_flow_speed_config(
+    schema: FlowSpeedConfigSchema | None,
+) -> FlowSpeedConfig | None:
+    """Build a ``FlowSpeedConfig`` from optional overrides."""
+    if schema is None:
+        return None
+    cfg = FlowSpeedConfig()
+    _merge_onto(schema, cfg)
+    return cfg
