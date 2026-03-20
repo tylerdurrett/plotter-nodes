@@ -120,14 +120,18 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 2.1 Define Pydantic Request/Response Schemas
 
-- [ ] Create request schema in `schemas.py`:
+- [x] Create request schema in `schemas.py`:
   - `GenerateRequest`: `image_path` (optional str), `maps` (optional list of str), `persist` (optional str)
   - `config` sub-schemas mirroring the dataclass hierarchy: `FeaturesConfig`, `ContourConfigSchema`, `DensityConfigSchema`, `ComplexityConfigSchema`, `FlowConfigSchema`, `FlowSpeedConfigSchema` — each with all fields optional (overrides only)
-  - Nested `RemapConfigSchema` and `LuminanceConfigSchema` for sub-objects
-- [ ] Create response schema:
+  - Nested `RemapConfigSchema`, `LuminanceConfigSchema`, and `ETFConfigSchema` for sub-objects
+  - Added `GenerateConfigSchema` top-level wrapper grouping all pipeline config schemas
+  - Added `VALID_MAP_KEYS` frozenset derived from `_MAP_DEFINITIONS` for validation reuse
+  - Note: `LICConfig` intentionally omitted — LIC visualization is not exported by the API
+  - Note: `DensityConfigSchema` maps to `ComposeConfig` dataclass (naming follows API-facing semantics)
+- [x] Create response schema:
   - `GenerateResponse`: `session_id` (str), `manifest` (dict), `base_url` (str)
   - `MapKeyInfo`: `key`, `value_range`, `description` — for the `/api/maps/keys` endpoint
-- [ ] Write tests: validate that schemas accept partial overrides and reject invalid map keys
+- [x] Write tests: validate that schemas accept partial overrides and reject invalid map keys (13 tests covering all pipeline configs, nested overrides, map key validation, and response schemas)
 
 **Acceptance Criteria:**
 - All config fields have correct types matching the dataclass counterparts

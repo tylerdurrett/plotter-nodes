@@ -106,3 +106,127 @@ class TestCORS:
             headers={"Origin": "http://localhost:3000"},
         )
         assert response.headers.get("access-control-allow-origin") == "*"
+
+
+# ---------------------------------------------------------------------------
+# Schema validation tests (Phase 2.1)
+# ---------------------------------------------------------------------------
+
+from pydantic import ValidationError  # noqa: E402
+
+from portrait_map_lab.server.schemas import (  # noqa: E402
+    VALID_MAP_KEYS,
+    GenerateRequest,
+    GenerateResponse,
+    MapKeyInfo,
+)
+
+
+class TestSchemas:
+    """Validate Pydantic request/response schemas."""
+
+    # -- GenerateRequest -------------------------------------------------
+
+    def test_empty_request_accepted(self) -> None:
+        """A completely empty body should be valid (all fields optional)."""
+        req = GenerateRequest()
+        assert req.image_path is None
+        assert req.maps is None
+        assert req.persist is None
+        assert req.config is None
+
+    def test_valid_map_keys_accepted(self) -> None:
+        """All canonical map keys should pass validation."""
+        req = GenerateRequest(maps=sorted(VALID_MAP_KEYS))
+        assert set(req.maps) == VALID_MAP_KEYS
+
+    def test_invalid_map_key_rejected(self) -> None:
+        """An unrecognised map key should raise a validation error."""
+        with pytest.raises(ValidationError, match="tonal_target"):
+            GenerateRequest(maps=["tonal_target"])
+
+    def test_mixed_valid_and_invalid_keys_rejected(self) -> None:
+        """A mix of valid and invalid keys should still be rejected."""
+        with pytest.raises(ValidationError, match="bogus"):
+            GenerateRequest(maps=["density_target", "bogus"])
+
+    # -- Partial config overrides ----------------------------------------
+
+    def test_partial_density_override(self) -> None:
+        """Only specifying ``density.gamma`` should leave other fields as None."""
+        req = GenerateRequest(config={"density": {"gamma": 2.0}})
+        assert req.config.density.gamma == 2.0
+        assert req.config.density.feature_weight is None
+        assert req.config.features is None
+
+    def test_nested_etf_override(self) -> None:
+        """Nested override ``flow.etf.blur_sigma`` should parse correctly."""
+        req = GenerateRequest(
+            config={"flow": {"etf": {"blur_sigma": 5.0}}}
+        )
+        assert req.config.flow.etf.blur_sigma == 5.0
+        assert req.config.flow.etf.structure_sigma is None
+        assert req.config.flow.contour_smooth_sigma is None
+
+    def test_features_weights_override(self) -> None:
+        """Custom feature weights should be accepted."""
+        req = GenerateRequest(
+            config={"features": {"weights": {"eyes": 1.0, "mouth": 0.0}}}
+        )
+        assert req.config.features.weights == {"eyes": 1.0, "mouth": 0.0}
+
+    def test_contour_override_with_nested_remap(self) -> None:
+        """Contour override with nested remap should parse correctly."""
+        req = GenerateRequest(
+            config={"contour": {"band_width": 10.0, "remap": {"radius": 200.0}}}
+        )
+        assert req.config.contour.band_width == 10.0
+        assert req.config.contour.remap.radius == 200.0
+        assert req.config.contour.remap.sigma is None
+
+    def test_complexity_override(self) -> None:
+        """Complexity config override should be accepted."""
+        req = GenerateRequest(
+            config={"complexity": {"metric": "laplacian", "sigma": 5.0}}
+        )
+        assert req.config.complexity.metric == "laplacian"
+        assert req.config.complexity.sigma == 5.0
+
+    def test_flow_speed_override(self) -> None:
+        """Flow speed config override should be accepted."""
+        req = GenerateRequest(
+            config={"flow_speed": {"speed_min": 0.1, "speed_max": 0.8}}
+        )
+        assert req.config.flow_speed.speed_min == 0.1
+        assert req.config.flow_speed.speed_max == 0.8
+
+    def test_all_config_fields_default_none(self) -> None:
+        """An empty config should have all pipeline sections as None."""
+        req = GenerateRequest(config={})
+        cfg = req.config
+        assert cfg.features is None
+        assert cfg.contour is None
+        assert cfg.density is None
+        assert cfg.complexity is None
+        assert cfg.flow is None
+        assert cfg.flow_speed is None
+
+    # -- Response schemas ------------------------------------------------
+
+    def test_generate_response_roundtrip(self) -> None:
+        """GenerateResponse should serialize and deserialize correctly."""
+        resp = GenerateResponse(
+            session_id="abc-123",
+            manifest={"version": 1, "maps": []},
+            base_url="/api/maps/abc-123",
+        )
+        data = resp.model_dump()
+        assert data["session_id"] == "abc-123"
+        assert data["base_url"] == "/api/maps/abc-123"
+
+    def test_map_key_info_structure(self) -> None:
+        """MapKeyInfo should hold key, value_range, and description."""
+        info = MapKeyInfo(key="flow_x", value_range=[-1.0, 1.0], description="X component")
+        assert info.key == "flow_x"
+        assert info.value_range == [-1.0, 1.0]
+        assert info.description == "X component"
