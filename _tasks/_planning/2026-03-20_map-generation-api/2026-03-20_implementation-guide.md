@@ -65,13 +65,15 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 1.2 Create Server Module Skeleton
 
-- [ ] Create `src/portrait_map_lab/server/__init__.py` (empty)
-- [ ] Create `src/portrait_map_lab/server/config.py` with a `ServerConfig` dataclass: `host` (default `"127.0.0.1"`), `port` (default `8100`), `cache_dir` (default `".cache/api"`), `session_ttl_seconds` (default `1800`)
-- [ ] Create `src/portrait_map_lab/server/app.py` with:
+- [x] Create `src/portrait_map_lab/server/__init__.py` — re-exports `create_app` and `ServerConfig` (divergence: not empty, added re-exports per code review)
+- [x] Create `src/portrait_map_lab/server/config.py` with a `ServerConfig` dataclass: `host` (default `"127.0.0.1"`), `port` (default `8100`), `cache_dir` (default `Path(".cache/api")` — uses `Path` not `str` per code review), `session_ttl_seconds` (default `1800`)
+- [x] Create `src/portrait_map_lab/server/app.py` with:
   - `create_app()` factory function returning a FastAPI instance
   - `CORSMiddleware` with `allow_origins=["*"]`, `allow_methods=["*"]`, `allow_headers=["*"]`
-  - A `GET /api/health` endpoint returning `{"status": "ok"}`
-- [ ] Create `src/portrait_map_lab/server/schemas.py` — empty for now, will be populated in Phase 2
+  - A `GET /api/health` endpoint (in `routes.py`) returning `{"status": "ok"}`
+  - Note: health endpoint placed in `routes.py` with `APIRouter(prefix="/api")`, included via `app.include_router(router)` — follows planned file structure
+  - Note: version sourced from `importlib.metadata.version()` instead of hardcoded
+- [x] Create `src/portrait_map_lab/server/schemas.py` — empty for now, will be populated in Phase 2
 
 **Acceptance Criteria:**
 - `from portrait_map_lab.server.app import create_app` works
