@@ -82,11 +82,13 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 1.3 Add `serve` Subcommand to CLI
 
-- [ ] Add a `serve` subparser to `scripts/run_pipeline.py` with `--host` and `--port` arguments
-- [ ] The `handle_serve()` function lazily imports `fastapi` and `uvicorn` inside the function body
-- [ ] If `fastapi` or `uvicorn` are not installed, print a clear error: `"The API server requires additional dependencies. Install with: uv pip install -e '.[api]'"`
-- [ ] When dependencies are available, call `uvicorn.run(app, host=host, port=port)`
-- [ ] Write tests: verify the `serve` subparser is registered and parses `--host`/`--port` arguments
+- [x] Add a `serve` subparser to `scripts/run_pipeline.py` with `--host` and `--port` arguments
+- [x] The `handle_serve()` function lazily imports `fastapi` and `uvicorn` inside the function body
+- [x] If `fastapi` or `uvicorn` are not installed, print a clear error: `"The API server requires additional dependencies. Install with: uv pip install -e '.[api]'"`
+- [x] When dependencies are available, call `uvicorn.run(app, host=host, port=port)`
+- [x] Write tests: verify the `serve` subparser is registered and parses `--host`/`--port` arguments
+  - Note: argparse defaults sourced from `ServerConfig` instance (not hardcoded) per code review
+  - Note: test assertions also reference `ServerConfig` to verify CLI/config alignment
 
 **Acceptance Criteria:**
 - `uv run python scripts/run_pipeline.py serve` starts a server on `127.0.0.1:8100`
@@ -97,14 +99,15 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 1.4 Add Endpoint Tests with TestClient
 
-- [ ] Create `tests/test_server.py`
-- [ ] Add a `client` pytest fixture that creates a `httpx.ASGITransport` + `httpx.Client` from `create_app()` (no real server needed)
-- [ ] Test `GET /api/health` returns 200 with `{"status": "ok"}`
-- [ ] Test CORS headers are present in response
-- [ ] Run tests: `uv run pytest tests/test_server.py -v`
+- [x] Create `tests/test_server.py`
+- [x] Add a `client` pytest fixture that creates a `httpx.ASGITransport` + `httpx.AsyncClient` from `create_app()` (no real server needed)
+  - Note: uses `AsyncClient` (not sync `Client`) since `ASGITransport` requires async; fixture is an async generator with proper cleanup via `async with`
+- [x] Test `GET /api/health` returns 200 with `{"status": "ok"}`
+- [x] Test CORS headers are present in response
+- [x] Run tests: `uv run pytest tests/test_server.py -v`
 
 **Acceptance Criteria:**
-- All server tests pass
+- All server tests pass (8/8 passing)
 - Tests run without starting a real uvicorn process
 
 ---

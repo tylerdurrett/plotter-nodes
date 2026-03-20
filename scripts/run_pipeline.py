@@ -37,6 +37,7 @@ from portrait_map_lab.pipelines import (
     save_flow_outputs,
     save_pipeline_outputs,
 )
+from portrait_map_lab.server.config import ServerConfig
 from portrait_map_lab.storage import ensure_output_dir, load_image
 
 
@@ -605,6 +606,26 @@ def parse_args() -> argparse.Namespace:
         "--export",
         action="store_true",
         help="Generate export bundle (float32 .bin + manifest.json) for TypeScript",
+    )
+
+    # Serve subcommand (API server)
+    serve_parser = subparsers.add_parser(
+        "serve",
+        help="Start the Map Generation API server",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    _serve_defaults = ServerConfig()
+    serve_parser.add_argument(
+        "--host",
+        type=str,
+        default=_serve_defaults.host,
+        help="Bind address for the server",
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=_serve_defaults.port,
+        help="Port number for the server",
     )
 
     return parser.parse_args()
@@ -1342,6 +1363,35 @@ def handle_all(
     return 0
 
 
+def handle_serve(args: argparse.Namespace) -> int:
+    """Start the Map Generation API server.
+
+    Parameters
+    ----------
+    args
+        Parsed command-line arguments with ``host`` and ``port``.
+
+    Returns
+    -------
+    int
+        Exit code (0 for success, 1 for error).
+    """
+    try:
+        import uvicorn
+
+        from portrait_map_lab.server import create_app
+    except ImportError:
+        print(
+            "The API server requires additional dependencies. "
+            "Install with: uv pip install -e '.[api]'"
+        )
+        return 1
+
+    app = create_app()
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
 def main() -> int:
     """Main entry point for the CLI script.
 
@@ -1359,6 +1409,10 @@ def main() -> int:
 
     # Parse arguments
     args = parse_args()
+
+    # Handle serve subcommand early — it has no image_path
+    if args.pipeline == "serve":
+        return handle_serve(args)
 
     # Validate image path
     if not args.image_path.exists():
