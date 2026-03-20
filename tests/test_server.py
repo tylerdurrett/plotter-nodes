@@ -230,3 +230,47 @@ class TestSchemas:
         assert info.key == "flow_x"
         assert info.value_range == [-1.0, 1.0]
         assert info.description == "X component"
+
+
+# ---------------------------------------------------------------------------
+# Map keys endpoint tests (Phase 2.2)
+# ---------------------------------------------------------------------------
+
+class TestMapKeysEndpoint:
+    """Verify the ``GET /api/maps/keys`` endpoint."""
+
+    @pytest.mark.anyio
+    async def test_returns_200(self, client: httpx.AsyncClient) -> None:
+        response = await client.get("/api/maps/keys")
+        assert response.status_code == 200
+
+    @pytest.mark.anyio
+    async def test_returns_all_map_keys(self, client: httpx.AsyncClient) -> None:
+        """Response should contain all keys from _MAP_DEFINITIONS."""
+        response = await client.get("/api/maps/keys")
+        data = response.json()
+        assert len(data) == len(VALID_MAP_KEYS)
+        returned_keys = {entry["key"] for entry in data}
+        assert returned_keys == VALID_MAP_KEYS
+
+    @pytest.mark.anyio
+    async def test_entry_structure(self, client: httpx.AsyncClient) -> None:
+        """Each entry should have key (str), value_range (2-element list), description (str)."""
+        response = await client.get("/api/maps/keys")
+        for entry in response.json():
+            assert isinstance(entry["key"], str)
+            assert isinstance(entry["value_range"], list)
+            assert len(entry["value_range"]) == 2
+            assert all(isinstance(v, (int, float)) for v in entry["value_range"])
+            assert isinstance(entry["description"], str)
+            assert len(entry["description"]) > 0
+
+    @pytest.mark.anyio
+    async def test_known_keys_present(self, client: httpx.AsyncClient) -> None:
+        """Spot-check that well-known keys are included with correct ranges."""
+        response = await client.get("/api/maps/keys")
+        by_key = {entry["key"]: entry for entry in response.json()}
+        assert "density_target" in by_key
+        assert by_key["density_target"]["value_range"] == [0.0, 1.0]
+        assert "flow_x" in by_key
+        assert by_key["flow_x"]["value_range"] == [-1.0, 1.0]

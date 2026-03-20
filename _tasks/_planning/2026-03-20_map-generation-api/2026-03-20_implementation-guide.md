@@ -140,10 +140,11 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 2.2 Implement `/api/maps/keys` Endpoint
 
-- [ ] Add `GET /api/maps/keys` route in `routes.py`
-- [ ] Source data from `_MAP_DEFINITIONS` in `export.py` — import and iterate to build response
-- [ ] Return list of `{key, value_range, description}` for each defined map
-- [ ] Write tests: verify response contains all 7 map keys with correct structure
+- [x] Add `GET /api/maps/keys` route in `routes.py`
+- [x] Source data from `_MAP_DEFINITIONS` in `export.py` — import and iterate to build response
+  - Note: `MAP_KEY_INFOS` pre-built list added to `schemas.py` (computed once at import time); `routes.py` imports from `.schemas` only, avoiding direct dependency on private `_MAP_DEFINITIONS`
+- [x] Return list of `{key, value_range, description}` for each defined map
+- [x] Write tests: verify response contains all 7 map keys with correct structure (4 tests: status 200, all keys present, entry structure, known key spot-checks)
 
 **Acceptance Criteria:**
 - Response lists exactly the 7 keys from `_MAP_DEFINITIONS`

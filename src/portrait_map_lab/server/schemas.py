@@ -22,6 +22,7 @@ __all__ = [
     "GenerateRequest",
     "GenerateResponse",
     "LuminanceConfigSchema",
+    "MAP_KEY_INFOS",
     "MapKeyInfo",
     "RemapConfigSchema",
     "VALID_MAP_KEYS",
@@ -188,3 +189,14 @@ class MapKeyInfo(BaseModel):
     key: str
     value_range: list[float]
     description: str
+
+
+# Pre-built list of all map key metadata, computed once at import time.
+MAP_KEY_INFOS: list[MapKeyInfo] = [
+    MapKeyInfo(
+        key=key,
+        value_range=list(value_range),
+        description=description,
+    )
+    for key, _attr_path, value_range, description in _MAP_DEFINITIONS
+]
