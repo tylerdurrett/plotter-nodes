@@ -289,4 +289,4 @@ The pipeline architecture supports future extensions:
 
 - [Technical Architecture](architecture.md) - System design and implementation details
 - [Vision Document](../vision.md) - Broader project goals and roadmap
-- [API Reference](https://github.com/username/portrait-map-lab/docs/api) - Complete API documentation
+- [Map Generation API](../server/integration-guide.md) - HTTP API integration guide for client applications

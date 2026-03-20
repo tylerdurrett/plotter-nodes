@@ -429,7 +429,7 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 5.3 Write Integration Guide
 
-- [ ] Create `docs/server/integration-guide.md` covering:
+- [x] Create `docs/server/integration-guide.md` covering:
   - Starting the server (`uv run python scripts/run_pipeline.py serve`)
   - Checking health (`GET /api/health`)
   - Discovering available maps (`GET /api/maps/keys`)
@@ -442,8 +442,12 @@ pyproject.toml                  # (modified) Add [api] optional dependency
     - `manifest.json` at `{base_url}/manifest.json` → fetched automatically
     - `.bin` files at `{base_url}/{filename}` → fetched on demand
   - Session lifecycle and TTL behavior
-- [ ] Update `docs/pipeline/README.md` with a link to the server docs
-- [ ] Verify the Swagger docs at `/docs` are complete and accurate
+  - Note: Also covers concurrency model, CORS configuration, error responses, binary format spec, pipeline dependency table, and interactive Swagger/ReDoc docs
+  - Note: Code review caught missing "bias" in `importance` description — fixed to match `_MAP_DEFINITIONS`
+- [x] Update `docs/pipeline/README.md` with a link to the server docs
+  - Note: Replaced dead `https://github.com/username/...` placeholder link with relative link to `../server/integration-guide.md`; also fixed pre-existing missing trailing newline
+- [x] Verify the Swagger docs at `/docs` are complete and accurate
+  - Note: Verified by inspecting `create_app()` in `app.py` — FastAPI is configured with `title`, `description`, `version` and no `docs_url=None` override, so `/docs` (Swagger) and `/redoc` (ReDoc) are active by default with auto-generated OpenAPI schemas
 
 **Acceptance Criteria:**
 - Integration guide covers the full client workflow from health check to map consumption
