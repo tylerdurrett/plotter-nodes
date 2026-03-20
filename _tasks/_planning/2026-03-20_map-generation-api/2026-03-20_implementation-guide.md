@@ -419,8 +419,10 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 5.2 Add `.cache/` to `.gitignore`
 
-- [ ] Add `.cache/` to the project's `.gitignore`
-- [ ] Verify with `git status` that `.cache/api/` directories are ignored
+- [x] Add `.cache/` to the project's `.gitignore`
+  - Note: Added under a new "# API cache" comment section, below the existing Output entries
+- [x] Verify with `git status` that `.cache/api/` directories are ignored
+  - Note: Confirmed via `git check-ignore .cache/api/test` — pattern matches correctly
 
 **Acceptance Criteria:**
 - Generated cache files do not appear in `git status`

@@ -23,6 +23,9 @@ output/
 output_custom/
 .archived-output/
 
+# API cache
+.cache/
+
 # OS
 .DS_Store
 Thumbs.db
