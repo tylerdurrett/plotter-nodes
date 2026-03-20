@@ -55,9 +55,9 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 1.1 Add Optional Dependencies
 
-- [ ] Add `[project.optional-dependencies] api` section to `pyproject.toml` with `fastapi>=0.115`, `uvicorn>=0.34`, `python-multipart>=0.0.9`
-- [ ] Add `httpx>=0.28` to the `dev` optional dependencies (for `TestClient`)
-- [ ] Run `uv pip install -e ".[api,dev]"` and verify installation succeeds
+- [x] Add `[project.optional-dependencies] api` section to `pyproject.toml` with `fastapi>=0.115`, `uvicorn>=0.34`, `python-multipart>=0.0.9`
+- [x] Add `httpx>=0.28` to the `dev` optional dependencies (for `TestClient`)
+- [x] Run `uv pip install -e ".[api,dev]"` and verify installation succeeds
 
 **Acceptance Criteria:**
 - `python -c "import fastapi; import uvicorn"` succeeds after install
