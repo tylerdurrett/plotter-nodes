@@ -24,7 +24,7 @@ from portrait_map_lab.models import ComplexityConfig
 from portrait_map_lab.pipelines import run_all_pipelines
 from portrait_map_lab.storage import load_image
 
-from .config import ServerConfig
+from .cache import SessionCache
 from .resolver import resolve_pipelines, run_resolved_pipelines
 from .schemas import (
     MAP_KEY_INFOS,
@@ -50,10 +50,10 @@ router = APIRouter(prefix="/api")
 # bounding to one concurrent run caps peak memory.
 _pipeline_lock = threading.Lock()
 
-# Lightweight in-memory session registry — tracks metadata for list/delete
-# endpoints.  Phase 4 will replace this with a full SessionCache class.
-_session_registry: dict[str, SessionInfo] = {}
-_registry_lock = threading.Lock()
+
+def _get_cache(request: Request) -> SessionCache:
+    """Retrieve the :class:`SessionCache` from application state."""
+    return request.app.state.cache
 
 
 async def _parse_request(
@@ -96,6 +96,7 @@ def list_map_keys() -> list[MapKeyInfo]:
 
 @router.post("/generate")
 def generate_maps(
+    request: Request,
     parsed: tuple[GenerateRequest, UploadFile | None] = Depends(_parse_request),
 ) -> GenerateResponse:
     """Generate maps from a portrait image.
@@ -104,6 +105,7 @@ def generate_maps(
     with field name ``image``.  The endpoint runs all pipelines synchronously
     and writes the resulting binary maps to the session cache directory.
     """
+    cache = _get_cache(request)
     body, upload_file = parsed
     temp_path: Path | None = None
 
@@ -207,8 +209,7 @@ def generate_maps(
 
         # --- write to cache ---
         session_id = str(uuid.uuid4())
-        config = ServerConfig()
-        session_dir = config.cache_dir / session_id
+        session_dir = cache.get_path(session_id)
         session_dir.mkdir(parents=True, exist_ok=True)
 
         for key, data in bundle.binary_maps.items():
@@ -224,15 +225,14 @@ def generate_maps(
             session_id, len(bundle.binary_maps), session_dir,
         )
 
-        # Register session metadata for the list/delete endpoints.
+        # Register session metadata in the cache.
         info = SessionInfo(
             session_id=session_id,
             source_image=manifest_dict.get("source_image", source_name),
             created_at=manifest_dict.get("created_at", ""),
             map_keys=[m["key"] for m in manifest_dict.get("maps", [])],
         )
-        with _registry_lock:
-            _session_registry[session_id] = info
+        cache.register(info)
 
         return GenerateResponse(
             session_id=session_id,
@@ -244,7 +244,7 @@ def generate_maps(
             temp_path.unlink(missing_ok=True)
 
 
-def _resolve_session_dir(session_id: str) -> Path:
+def _resolve_session_dir(session_id: str, cache_dir: Path) -> Path:
     """Resolve and validate a session cache directory path.
 
     Raises :class:`~fastapi.HTTPException` with 404 if the *session_id*
@@ -253,8 +253,7 @@ def _resolve_session_dir(session_id: str) -> Path:
     Returns the resolved :class:`~pathlib.Path` to the session directory
     (which may or may not exist on disk yet).
     """
-    config = ServerConfig()
-    cache_root = config.cache_dir.resolve()
+    cache_root = cache_dir.resolve()
     session_dir = (cache_root / session_id).resolve()
 
     if not session_dir.is_relative_to(cache_root):
@@ -263,14 +262,16 @@ def _resolve_session_dir(session_id: str) -> Path:
     return session_dir
 
 
-def _resolve_session_file(session_id: str, filename: str) -> Path:
+def _resolve_session_file(
+    session_id: str, filename: str, cache_dir: Path
+) -> Path:
     """Resolve and validate a file path within a session cache directory.
 
     Raises :class:`~fastapi.HTTPException` with 404 if the session directory
     or the requested file does not exist.  Path-traversal attempts (e.g.
     ``../`` in *session_id* or *filename*) are rejected.
     """
-    session_dir = _resolve_session_dir(session_id)
+    session_dir = _resolve_session_dir(session_id, cache_dir)
     file_path = (session_dir / filename).resolve()
 
     # Guard against path traversal in filename (e.g. "../secret.txt")
@@ -284,48 +285,38 @@ def _resolve_session_file(session_id: str, filename: str) -> Path:
 
 
 @router.get("/maps/{session_id}/manifest.json")
-def get_session_manifest(session_id: str) -> Response:
+def get_session_manifest(session_id: str, request: Request) -> Response:
     """Serve the manifest JSON for a cached session."""
-    file_path = _resolve_session_file(session_id, "manifest.json")
+    cache = _get_cache(request)
+    file_path = _resolve_session_file(session_id, "manifest.json", cache.cache_dir)
     return Response(content=file_path.read_bytes(), media_type="application/json")
 
 
 @router.get("/maps/{session_id}/{filename}")
-def get_session_file(session_id: str, filename: str) -> FileResponse:
+def get_session_file(session_id: str, filename: str, request: Request) -> FileResponse:
     """Serve a binary map file from a cached session."""
-    file_path = _resolve_session_file(session_id, filename)
+    cache = _get_cache(request)
+    file_path = _resolve_session_file(session_id, filename, cache.cache_dir)
     return FileResponse(file_path, media_type="application/octet-stream")
 
 
 @router.get("/sessions")
-def list_sessions() -> list[SessionInfo]:
+def list_sessions(request: Request) -> list[SessionInfo]:
     """Return metadata for all tracked sessions."""
-    with _registry_lock:
-        return list(_session_registry.values())
+    cache = _get_cache(request)
+    return cache.list_sessions()
 
 
 @router.delete("/maps/{session_id}", status_code=204)
-def delete_session(session_id: str) -> Response:
+def delete_session(session_id: str, request: Request) -> Response:
     """Delete a cached session directory and remove it from the registry.
 
     Returns 204 No Content on success, 404 if the session does not exist.
     """
-    session_dir = _resolve_session_dir(session_id)
+    cache = _get_cache(request)
+    _resolve_session_dir(session_id, cache.cache_dir)  # validates path traversal
 
-    # Check both registry and disk — a session may exist on disk from a
-    # previous server run without being in the in-memory registry.
-    in_registry = session_id in _session_registry
-    on_disk = session_dir.is_dir()
-
-    if not in_registry and not on_disk:
+    if not cache.delete(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
-
-    # Clean up disk.
-    if on_disk:
-        shutil.rmtree(session_dir)
-
-    # Clean up registry.
-    with _registry_lock:
-        _session_registry.pop(session_id, None)
 
     return Response(status_code=204)

@@ -356,15 +356,30 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 4.2 Integrate Cache into Server Lifecycle
 
-- [ ] Use FastAPI's lifespan context manager to:
+- [x] Use FastAPI's lifespan context manager to:
   - Initialize the `SessionCache` on startup (triggers directory scan)
   - Start a background task that runs `cleanup_expired()` every 60 seconds
   - Cancel the background task on shutdown
-- [ ] Wire the `SessionCache` into route handlers via FastAPI dependency injection (or app state)
-- [ ] Update `POST /api/generate` to use `SessionCache.register()` instead of ad-hoc directory creation
-- [ ] Update `GET /api/sessions` and `DELETE` to use `SessionCache`
-- [ ] Update file-serving endpoints to verify session exists via cache before serving
-- [ ] Write integration test: generate a session, wait for TTL to pass (use a short TTL in test config), verify session is cleaned up
+  - Note: `_lifespan` async context manager added to `app.py`; reads `_server_config` from `app.state` (set by `create_app`) or falls back to `ServerConfig()` defaults
+  - Note: `cleanup_expired()` runs via `asyncio.to_thread()` to avoid blocking the event loop during filesystem `stat()` calls
+  - Note: `_CLEANUP_INTERVAL_SECONDS = 60` module constant controls the cleanup interval
+- [x] Wire the `SessionCache` into route handlers via FastAPI dependency injection (or app state)
+  - Note: Used `app.state.cache` pattern with a `_get_cache(request)` helper rather than `Depends()` — simpler for this use case where every handler needs the same cache instance
+  - Note: `create_app(config)` now accepts an optional `ServerConfig`; stores it on `app.state._server_config` for the lifespan to pick up
+- [x] Update `POST /api/generate` to use `SessionCache.register()` instead of ad-hoc directory creation
+  - Note: Removed module-level `_session_registry` dict and `_registry_lock`; `generate_maps` now uses `cache.get_path(session_id)` and `cache.register(info)`
+- [x] Update `GET /api/sessions` and `DELETE` to use `SessionCache`
+  - Note: `list_sessions` delegates to `cache.list_sessions()`; `delete_session` delegates to `cache.delete()` which handles both registry and disk cleanup
+  - Note: Simplified `delete_session` to trust `cache.delete()` (returns `bool`) — no redundant manual `shutil.rmtree` fallback
+- [x] Update file-serving endpoints to verify session exists via cache before serving
+  - Note: `_resolve_session_dir` and `_resolve_session_file` now accept `cache_dir: Path` (not full `SessionCache`) to reduce coupling; callers pass `cache.cache_dir`
+- [x] Write integration test: generate a session, wait for TTL to pass (use a short TTL in test config), verify session is cleaned up
+  - Note: `TestCacheLifecycle` class with 5 tests: cache registration on generate, configured directory, delete via cache, TTL cleanup (uses `SessionCache` directly with 1s TTL), and startup scan recovery
+  - Note: Test `client` fixture now creates a per-test app with `ServerConfig(cache_dir=tmp_path/"cache")` and initialises `SessionCache` directly (bypassing lifespan, since httpx `ASGITransport` doesn't send lifespan events)
+  - Note: Removed `_clear_session_registry` fixture (no longer needed — each test gets its own app/cache)
+  - Note: Removed `ServerConfig` patching from `_mock_pipeline_stack` and `_mock_resolver_stack` (cache dir comes from app state now)
+  - Note: Also updated `handle_serve()` in `run_pipeline.py` to pass `ServerConfig(host, port)` to `create_app`
+  - Note: All 490 tests pass (3 skipped), no regressions
 
 **Acceptance Criteria:**
 - Background cleanup task runs without blocking request handling

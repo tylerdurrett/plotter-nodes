@@ -6,6 +6,7 @@ import contextlib
 import json
 import sys
 from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -15,6 +16,7 @@ import pytest
 
 from portrait_map_lab.export import ExportBundle, _manifest_to_dict
 from portrait_map_lab.models import ExportManifest, ExportMapEntry, LandmarkResult
+from portrait_map_lab.server.cache import SessionCache
 from portrait_map_lab.server.config import ServerConfig
 
 # ---------------------------------------------------------------------------
@@ -68,9 +70,18 @@ from portrait_map_lab.server.app import create_app  # noqa: E402
 
 
 @pytest.fixture
-async def client() -> AsyncGenerator[httpx.AsyncClient, None]:
-    """Create an httpx async test client backed by the FastAPI app (no real server)."""
-    app = create_app()
+async def client(tmp_path: Path) -> AsyncGenerator[httpx.AsyncClient, None]:
+    """Create an httpx async test client backed by the FastAPI app.
+
+    Each test gets its own app with a fresh ``SessionCache`` backed by a
+    temporary directory.  The cache is initialised directly (bypassing the
+    lifespan's background cleanup task) for test isolation and speed.
+    """
+    config = ServerConfig(cache_dir=tmp_path / "cache")
+    app = create_app(config)
+    # Initialise cache directly — httpx ASGITransport does not send
+    # lifespan events, so we set up the cache that the lifespan would create.
+    app.state.cache = SessionCache(config)
     transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
         yield c
@@ -334,8 +345,12 @@ _PATCH_MANIFEST = "portrait_map_lab.server.routes._manifest_to_dict"
 
 
 @contextlib.contextmanager
-def _mock_pipeline_stack(cache_dir: Path | None = None):
-    """Context manager that mocks the entire pipeline for generate tests."""
+def _mock_pipeline_stack():
+    """Context manager that mocks the entire pipeline for generate tests.
+
+    The cache directory is now managed by the app's ``SessionCache`` (set up
+    by the ``client`` fixture), so no ``ServerConfig`` patching is needed.
+    """
     fake_image = np.zeros((100, 100, 3), dtype=np.uint8)
     sentinel_result = MagicMock(name="ComposedResult")
     bundle = _fake_export_bundle()
@@ -348,13 +363,6 @@ def _mock_pipeline_stack(cache_dir: Path | None = None):
         patch(_PATCH_BUNDLE, return_value=bundle),
         patch(_PATCH_MANIFEST, return_value=manifest_dict),
     ]
-    if cache_dir is not None:
-        patches.append(
-            patch(
-                "portrait_map_lab.server.routes.ServerConfig",
-                return_value=ServerConfig(cache_dir=cache_dir),
-            )
-        )
 
     with contextlib.ExitStack() as stack:
         mocks = [stack.enter_context(p) for p in patches]
@@ -369,7 +377,7 @@ class TestGenerateEndpoint:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """A valid image_path should return 200 with session_id, manifest, base_url."""
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+        with _mock_pipeline_stack():
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -434,7 +442,7 @@ class TestGenerateEndpoint:
     ) -> None:
         """Generate should write .bin files and manifest.json to the cache dir."""
         cache_dir = tmp_path / "cache"
-        with _mock_pipeline_stack(cache_dir=cache_dir):
+        with _mock_pipeline_stack():
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -458,7 +466,7 @@ class TestGenerateEndpoint:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """The manifest in the response should have all required plotter fields."""
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+        with _mock_pipeline_stack():
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -488,7 +496,7 @@ class TestGenerateEndpoint:
         """Multipart file upload should also produce a valid response."""
         # Create a small dummy JPEG-like file
         fake_bytes = b"\xff\xd8\xff" + b"\x00" * 100
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+        with _mock_pipeline_stack():
             response = await client.post(
                 "/api/generate",
                 files={"image": ("test.jpg", fake_bytes, "image/jpeg")},
@@ -503,7 +511,7 @@ class TestGenerateEndpoint:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Config overrides should be propagated to run_all_pipelines."""
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+        with _mock_pipeline_stack():
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({
@@ -629,14 +637,14 @@ class TestConfigMergeHelpers:
 
 @contextlib.asynccontextmanager
 async def _generate_session(
-    client: httpx.AsyncClient, cache_dir: Path
+    client: httpx.AsyncClient,
 ):
     """Generate a mocked session and yield its response data.
 
-    Keeps the ``ServerConfig`` mock active so file-serving endpoints resolve
-    to the correct *cache_dir*.
+    The cache directory is managed by the app's ``SessionCache``, so no
+    ``ServerConfig`` patching is needed.
     """
-    with _mock_pipeline_stack(cache_dir=cache_dir):
+    with _mock_pipeline_stack():
         gen = await client.post(
             "/api/generate",
             content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -654,7 +662,7 @@ class TestMapFileServing:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Fetching manifest.json should return the same manifest as the generate response."""
-        async with _generate_session(client, tmp_path / "cache") as data:
+        async with _generate_session(client) as data:
             response = await client.get(f"{data['base_url']}/manifest.json")
         assert response.status_code == 200
         assert response.json() == data["manifest"]
@@ -664,7 +672,7 @@ class TestMapFileServing:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Fetching a .bin file should return valid float32 data with correct byte length."""
-        async with _generate_session(client, tmp_path / "cache") as data:
+        async with _generate_session(client) as data:
             manifest = data["manifest"]
             width, height = manifest["width"], manifest["height"]
             map_entry = manifest["maps"][0]
@@ -682,7 +690,7 @@ class TestMapFileServing:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """All .bin files listed in the manifest should be fetchable."""
-        async with _generate_session(client, tmp_path / "cache") as data:
+        async with _generate_session(client) as data:
             manifest = data["manifest"]
             expected_bytes = manifest["height"] * manifest["width"] * 4
             for map_entry in manifest["maps"]:
@@ -703,7 +711,7 @@ class TestMapFileServing:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """A non-existent filename within a valid session should return 404."""
-        async with _generate_session(client, tmp_path / "cache") as data:
+        async with _generate_session(client) as data:
             response = await client.get(f"{data['base_url']}/nonexistent.bin")
         assert response.status_code == 404
 
@@ -720,7 +728,7 @@ class TestMapFileServing:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Path traversal in filename should return 404."""
-        async with _generate_session(client, tmp_path / "cache") as data:
+        async with _generate_session(client) as data:
             response = await client.get(f"{data['base_url']}/../../../etc/passwd")
         assert response.status_code == 404
 
@@ -740,7 +748,7 @@ class TestConfigOverrideIntegration:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """``config.density.gamma = 2.0`` should reach run_all_pipelines as compose_config."""
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+        with _mock_pipeline_stack() as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({
@@ -763,7 +771,7 @@ class TestConfigOverrideIntegration:
     ) -> None:
         """``config.features.weights`` should reach run_all_pipelines as feature_config."""
         weights = {"eyes": 1.0, "mouth": 0.0}
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+        with _mock_pipeline_stack() as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({
@@ -783,7 +791,7 @@ class TestConfigOverrideIntegration:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """``config.flow.etf.blur_sigma = 5.0`` should merge onto FlowConfig.etf."""
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+        with _mock_pipeline_stack() as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({
@@ -804,8 +812,8 @@ class TestConfigOverrideIntegration:
     async def test_no_config_uses_defaults(
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
-        """No config overrides should pass None for optional configs and default ComplexityConfig."""
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+        """No config overrides: None for optional configs, default ComplexityConfig."""
+        with _mock_pipeline_stack() as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -870,7 +878,6 @@ def _fake_export_bundle_for_keys(keys: list[str]) -> ExportBundle:
 def _mock_resolver_stack(
     requested_maps: list[str],
     resolved_pipelines: set[str],
-    cache_dir: Path | None = None,
 ):
     """Context manager that mocks the resolver path for generate tests.
 
@@ -893,13 +900,6 @@ def _mock_resolver_stack(
         patch(_PATCH_BUNDLE_FOR_MAPS, return_value=bundle),
         patch(_PATCH_MANIFEST, return_value=manifest_dict),
     ]
-    if cache_dir is not None:
-        patches.append(
-            patch(
-                "portrait_map_lab.server.routes.ServerConfig",
-                return_value=ServerConfig(cache_dir=cache_dir),
-            )
-        )
 
     with contextlib.ExitStack() as stack:
         mocks = [stack.enter_context(p) for p in patches]
@@ -918,7 +918,7 @@ class TestResolverIntegration:
         maps = ["complexity"]
         resolved = {"complexity"}
 
-        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir) as mocks:
+        with _mock_resolver_stack(maps, resolved) as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
@@ -955,7 +955,7 @@ class TestResolverIntegration:
         maps = ["flow_x", "flow_y"]
         resolved = {"contour", "flow"}
 
-        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir) as mocks:
+        with _mock_resolver_stack(maps, resolved) as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
@@ -980,11 +980,10 @@ class TestResolverIntegration:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Requesting ``["density_target", "flow_speed"]`` should run all needed pipelines."""
-        cache_dir = tmp_path / "cache"
         maps = ["density_target", "flow_speed"]
         resolved = {"features", "contour", "density", "complexity", "flow"}
 
-        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir) as mocks:
+        with _mock_resolver_stack(maps, resolved) as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
@@ -1006,7 +1005,7 @@ class TestResolverIntegration:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Omitting ``maps`` should use the full ``run_all_pipelines`` path."""
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+        with _mock_pipeline_stack() as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -1023,11 +1022,10 @@ class TestResolverIntegration:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Config overrides should be forwarded through the resolver path."""
-        cache_dir = tmp_path / "cache"
         maps = ["complexity"]
         resolved = {"complexity"}
 
-        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir) as mocks:
+        with _mock_resolver_stack(maps, resolved) as mocks:
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({
@@ -1048,11 +1046,10 @@ class TestResolverIntegration:
         self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """The resolver path should return a valid ``base_url`` for file serving."""
-        cache_dir = tmp_path / "cache"
         maps = ["complexity"]
         resolved = {"complexity"}
 
-        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir):
+        with _mock_resolver_stack(maps, resolved):
             response = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
@@ -1066,23 +1063,13 @@ class TestResolverIntegration:
 # Session list and delete endpoint tests (Phase 3.4)
 # ---------------------------------------------------------------------------
 
-from portrait_map_lab.server import routes as _routes_module  # noqa: E402
-
-
-@pytest.fixture(autouse=False)
-def _clear_session_registry():
-    """Clear the in-memory session registry before and after the test."""
-    _routes_module._session_registry.clear()
-    yield
-    _routes_module._session_registry.clear()
-
 
 class TestSessionEndpoints:
     """Verify the ``GET /api/sessions`` and ``DELETE /api/maps/{session_id}`` endpoints."""
 
     @pytest.mark.anyio
     async def test_sessions_empty_initially(
-        self, client: httpx.AsyncClient, _clear_session_registry: None
+        self, client: httpx.AsyncClient
     ) -> None:
         """``GET /api/sessions`` should return an empty list when no sessions exist."""
         response = await client.get("/api/sessions")
@@ -1091,10 +1078,10 @@ class TestSessionEndpoints:
 
     @pytest.mark.anyio
     async def test_sessions_lists_after_generate(
-        self, client: httpx.AsyncClient, tmp_path: Path, _clear_session_registry: None
+        self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """After generating, the session should appear in the sessions list."""
-        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+        with _mock_pipeline_stack():
             gen = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -1115,11 +1102,11 @@ class TestSessionEndpoints:
 
     @pytest.mark.anyio
     async def test_sessions_lists_multiple(
-        self, client: httpx.AsyncClient, tmp_path: Path, _clear_session_registry: None
+        self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Multiple generates should produce multiple session entries."""
         for i in range(3):
-            with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+            with _mock_pipeline_stack():
                 resp = await client.post(
                     "/api/generate",
                     content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -1133,11 +1120,10 @@ class TestSessionEndpoints:
 
     @pytest.mark.anyio
     async def test_delete_session_returns_204(
-        self, client: httpx.AsyncClient, tmp_path: Path, _clear_session_registry: None
+        self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """``DELETE /api/maps/{session_id}`` should return 204 and remove from list."""
-        cache_dir = tmp_path / "cache"
-        with _mock_pipeline_stack(cache_dir=cache_dir):
+        with _mock_pipeline_stack():
             gen = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -1145,12 +1131,7 @@ class TestSessionEndpoints:
             )
         session_id = gen.json()["session_id"]
 
-        # Mock ServerConfig for delete endpoint too
-        with patch(
-            "portrait_map_lab.server.routes.ServerConfig",
-            return_value=ServerConfig(cache_dir=cache_dir),
-        ):
-            response = await client.delete(f"/api/maps/{session_id}")
+        response = await client.delete(f"/api/maps/{session_id}")
         assert response.status_code == 204
 
         # Session should be gone from the list
@@ -1159,11 +1140,11 @@ class TestSessionEndpoints:
 
     @pytest.mark.anyio
     async def test_delete_session_removes_files(
-        self, client: httpx.AsyncClient, tmp_path: Path, _clear_session_registry: None
+        self, client: httpx.AsyncClient, tmp_path: Path
     ) -> None:
         """Deleting a session should remove its cache directory from disk."""
         cache_dir = tmp_path / "cache"
-        with _mock_pipeline_stack(cache_dir=cache_dir):
+        with _mock_pipeline_stack():
             gen = await client.post(
                 "/api/generate",
                 content=json.dumps({"image_path": "/some/test.jpg"}),
@@ -1173,17 +1154,13 @@ class TestSessionEndpoints:
         session_dir = cache_dir / session_id
         assert session_dir.is_dir()
 
-        with patch(
-            "portrait_map_lab.server.routes.ServerConfig",
-            return_value=ServerConfig(cache_dir=cache_dir),
-        ):
-            response = await client.delete(f"/api/maps/{session_id}")
+        response = await client.delete(f"/api/maps/{session_id}")
         assert response.status_code == 204
         assert not session_dir.exists()
 
     @pytest.mark.anyio
     async def test_delete_nonexistent_session_returns_404(
-        self, client: httpx.AsyncClient, _clear_session_registry: None
+        self, client: httpx.AsyncClient
     ) -> None:
         """Deleting a non-existent session should return 404."""
         response = await client.delete("/api/maps/nonexistent-session-id")
@@ -1191,8 +1168,137 @@ class TestSessionEndpoints:
 
     @pytest.mark.anyio
     async def test_delete_path_traversal_returns_404(
-        self, client: httpx.AsyncClient, _clear_session_registry: None
+        self, client: httpx.AsyncClient
     ) -> None:
         """Path traversal in session_id on DELETE should return 404."""
         response = await client.delete("/api/maps/../../etc")
         assert response.status_code in (404, 422)
+
+
+# ---------------------------------------------------------------------------
+# Cache lifecycle integration tests (Phase 4.2)
+# ---------------------------------------------------------------------------
+
+
+class TestCacheLifecycle:
+    """Verify that the ``SessionCache`` is wired into the server lifecycle."""
+
+    @pytest.mark.anyio
+    async def test_generate_registers_session_in_cache(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Generating maps should register the session in the app's SessionCache."""
+        with _mock_pipeline_stack():
+            gen = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert gen.status_code == 200
+        session_id = gen.json()["session_id"]
+
+        # Access the cache directly from app state
+        cache: SessionCache = client._transport.app.state.cache  # type: ignore[attr-defined]
+        sessions = cache.list_sessions()
+        assert any(s.session_id == session_id for s in sessions)
+
+    @pytest.mark.anyio
+    async def test_cache_uses_configured_directory(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """The cache should use the directory from ``ServerConfig``."""
+        cache: SessionCache = client._transport.app.state.cache  # type: ignore[attr-defined]
+        assert cache.cache_dir == tmp_path / "cache"
+
+    @pytest.mark.anyio
+    async def test_delete_uses_cache(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Deleting a session should remove it from the ``SessionCache``."""
+        with _mock_pipeline_stack():
+            gen = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        session_id = gen.json()["session_id"]
+
+        response = await client.delete(f"/api/maps/{session_id}")
+        assert response.status_code == 204
+
+        cache: SessionCache = client._transport.app.state.cache  # type: ignore[attr-defined]
+        assert not any(s.session_id == session_id for s in cache.list_sessions())
+
+    def test_expired_sessions_cleaned_up_by_cache(
+        self, tmp_path: Path
+    ) -> None:
+        """Sessions past TTL should be removed when ``cleanup_expired`` is called.
+
+        This tests the integration between the cache and the generate
+        endpoint: a session registered by ``generate`` should be subject
+        to TTL cleanup.
+        """
+        # Create a cache with a very short TTL
+        config = ServerConfig(cache_dir=tmp_path / "cache", session_ttl_seconds=1)
+        cache = SessionCache(config)
+
+        # Simulate a session that was created 5 seconds ago
+        old_time = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
+        from portrait_map_lab.server.schemas import SessionInfo
+
+        info = SessionInfo(
+            session_id="old-session",
+            source_image="test.jpg",
+            created_at=old_time,
+            map_keys=["density_target"],
+        )
+        cache.register(info)
+
+        # Create the session directory on disk
+        session_dir = cache.get_path("old-session")
+        session_dir.mkdir(parents=True)
+        (session_dir / "density_target.bin").write_bytes(b"\x00" * 16)
+
+        # Run cleanup — session should be expired
+        removed = cache.cleanup_expired()
+        assert removed == 1
+        assert not session_dir.exists()
+        assert cache.list_sessions() == []
+
+    @pytest.mark.anyio
+    async def test_startup_scan_recovers_sessions(
+        self, tmp_path: Path
+    ) -> None:
+        """Sessions from a previous run should be discoverable after re-creating the cache.
+
+        Simulates a server restart by writing a manifest to disk, then
+        creating a fresh ``SessionCache`` that scans the directory.
+        """
+        cache_dir = tmp_path / "cache"
+        session_dir = cache_dir / "recovered-session"
+        session_dir.mkdir(parents=True)
+        manifest = {
+            "version": 1,
+            "source_image": "portrait.jpg",
+            "width": 100,
+            "height": 100,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "maps": [{"filename": "density_target.bin", "key": "density_target",
+                       "dtype": "float32", "shape": [100, 100],
+                       "value_range": [0.0, 1.0], "description": "test"}],
+        }
+        (session_dir / "manifest.json").write_text(json.dumps(manifest))
+
+        # Create a new app+cache — the startup scan should find the session
+        config = ServerConfig(cache_dir=cache_dir)
+        app = create_app(config)
+        app.state.cache = SessionCache(config)
+
+        transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
+            response = await c.get("/api/sessions")
+        assert response.status_code == 200
+        sessions = response.json()
+        assert len(sessions) == 1
+        assert sessions[0]["session_id"] == "recovered-session"
+        assert sessions[0]["source_image"] == "portrait.jpg"

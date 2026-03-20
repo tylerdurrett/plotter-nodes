@@ -1379,7 +1379,7 @@ def handle_serve(args: argparse.Namespace) -> int:
     try:
         import uvicorn
 
-        from portrait_map_lab.server import create_app
+        from portrait_map_lab.server import ServerConfig, create_app
     except ImportError:
         print(
             "The API server requires additional dependencies. "
@@ -1387,8 +1387,9 @@ def handle_serve(args: argparse.Namespace) -> int:
         )
         return 1
 
-    app = create_app()
-    uvicorn.run(app, host=args.host, port=args.port)
+    config = ServerConfig(host=args.host, port=args.port)
+    app = create_app(config)
+    uvicorn.run(app, host=config.host, port=config.port)
     return 0
 
 
