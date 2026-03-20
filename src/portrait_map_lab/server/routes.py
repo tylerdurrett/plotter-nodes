@@ -31,6 +31,7 @@ from .schemas import (
     GenerateRequest,
     GenerateResponse,
     MapKeyInfo,
+    SessionInfo,
     build_complexity_config,
     build_compose_config,
     build_contour_config,
@@ -48,6 +49,11 @@ router = APIRouter(prefix="/api")
 # Serialize pipeline execution — MediaPipe may not be thread-safe and
 # bounding to one concurrent run caps peak memory.
 _pipeline_lock = threading.Lock()
+
+# Lightweight in-memory session registry — tracks metadata for list/delete
+# endpoints.  Phase 4 will replace this with a full SessionCache class.
+_session_registry: dict[str, SessionInfo] = {}
+_registry_lock = threading.Lock()
 
 
 async def _parse_request(
@@ -218,6 +224,16 @@ def generate_maps(
             session_id, len(bundle.binary_maps), session_dir,
         )
 
+        # Register session metadata for the list/delete endpoints.
+        info = SessionInfo(
+            session_id=session_id,
+            source_image=manifest_dict.get("source_image", source_name),
+            created_at=manifest_dict.get("created_at", ""),
+            map_keys=[m["key"] for m in manifest_dict.get("maps", [])],
+        )
+        with _registry_lock:
+            _session_registry[session_id] = info
+
         return GenerateResponse(
             session_id=session_id,
             manifest=manifest_dict,
@@ -228,6 +244,25 @@ def generate_maps(
             temp_path.unlink(missing_ok=True)
 
 
+def _resolve_session_dir(session_id: str) -> Path:
+    """Resolve and validate a session cache directory path.
+
+    Raises :class:`~fastapi.HTTPException` with 404 if the *session_id*
+    contains a path-traversal attempt (e.g. ``../../etc``).
+
+    Returns the resolved :class:`~pathlib.Path` to the session directory
+    (which may or may not exist on disk yet).
+    """
+    config = ServerConfig()
+    cache_root = config.cache_dir.resolve()
+    session_dir = (cache_root / session_id).resolve()
+
+    if not session_dir.is_relative_to(cache_root):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return session_dir
+
+
 def _resolve_session_file(session_id: str, filename: str) -> Path:
     """Resolve and validate a file path within a session cache directory.
 
@@ -235,14 +270,7 @@ def _resolve_session_file(session_id: str, filename: str) -> Path:
     or the requested file does not exist.  Path-traversal attempts (e.g.
     ``../`` in *session_id* or *filename*) are rejected.
     """
-    config = ServerConfig()
-    cache_root = config.cache_dir.resolve()
-    session_dir = (cache_root / session_id).resolve()
-
-    # Guard against path traversal in session_id (e.g. "../../etc")
-    if not session_dir.is_relative_to(cache_root):
-        raise HTTPException(status_code=404, detail="Session not found")
-
+    session_dir = _resolve_session_dir(session_id)
     file_path = (session_dir / filename).resolve()
 
     # Guard against path traversal in filename (e.g. "../secret.txt")
@@ -267,3 +295,37 @@ def get_session_file(session_id: str, filename: str) -> FileResponse:
     """Serve a binary map file from a cached session."""
     file_path = _resolve_session_file(session_id, filename)
     return FileResponse(file_path, media_type="application/octet-stream")
+
+
+@router.get("/sessions")
+def list_sessions() -> list[SessionInfo]:
+    """Return metadata for all tracked sessions."""
+    with _registry_lock:
+        return list(_session_registry.values())
+
+
+@router.delete("/maps/{session_id}", status_code=204)
+def delete_session(session_id: str) -> Response:
+    """Delete a cached session directory and remove it from the registry.
+
+    Returns 204 No Content on success, 404 if the session does not exist.
+    """
+    session_dir = _resolve_session_dir(session_id)
+
+    # Check both registry and disk — a session may exist on disk from a
+    # previous server run without being in the in-memory registry.
+    in_registry = session_id in _session_registry
+    on_disk = session_dir.is_dir()
+
+    if not in_registry and not on_disk:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Clean up disk.
+    if on_disk:
+        shutil.rmtree(session_dir)
+
+    # Clean up registry.
+    with _registry_lock:
+        _session_registry.pop(session_id, None)
+
+    return Response(status_code=204)

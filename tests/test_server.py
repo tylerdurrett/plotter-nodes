@@ -1060,3 +1060,139 @@ class TestResolverIntegration:
             )
         data = response.json()
         assert data["base_url"].startswith("/api/maps/")
+
+
+# ---------------------------------------------------------------------------
+# Session list and delete endpoint tests (Phase 3.4)
+# ---------------------------------------------------------------------------
+
+from portrait_map_lab.server import routes as _routes_module  # noqa: E402
+
+
+@pytest.fixture(autouse=False)
+def _clear_session_registry():
+    """Clear the in-memory session registry before and after the test."""
+    _routes_module._session_registry.clear()
+    yield
+    _routes_module._session_registry.clear()
+
+
+class TestSessionEndpoints:
+    """Verify the ``GET /api/sessions`` and ``DELETE /api/maps/{session_id}`` endpoints."""
+
+    @pytest.mark.anyio
+    async def test_sessions_empty_initially(
+        self, client: httpx.AsyncClient, _clear_session_registry: None
+    ) -> None:
+        """``GET /api/sessions`` should return an empty list when no sessions exist."""
+        response = await client.get("/api/sessions")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    @pytest.mark.anyio
+    async def test_sessions_lists_after_generate(
+        self, client: httpx.AsyncClient, tmp_path: Path, _clear_session_registry: None
+    ) -> None:
+        """After generating, the session should appear in the sessions list."""
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+            gen = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert gen.status_code == 200
+        gen_data = gen.json()
+
+        response = await client.get("/api/sessions")
+        assert response.status_code == 200
+        sessions = response.json()
+        assert len(sessions) == 1
+        session = sessions[0]
+        assert session["session_id"] == gen_data["session_id"]
+        assert session["source_image"] == "test.jpg"
+        assert session["created_at"] == gen_data["manifest"]["created_at"]
+        assert "density_target" in session["map_keys"]
+
+    @pytest.mark.anyio
+    async def test_sessions_lists_multiple(
+        self, client: httpx.AsyncClient, tmp_path: Path, _clear_session_registry: None
+    ) -> None:
+        """Multiple generates should produce multiple session entries."""
+        for i in range(3):
+            with _mock_pipeline_stack(cache_dir=tmp_path / "cache"):
+                resp = await client.post(
+                    "/api/generate",
+                    content=json.dumps({"image_path": "/some/test.jpg"}),
+                    headers={"Content-Type": "application/json"},
+                )
+            assert resp.status_code == 200
+
+        response = await client.get("/api/sessions")
+        assert response.status_code == 200
+        assert len(response.json()) == 3
+
+    @pytest.mark.anyio
+    async def test_delete_session_returns_204(
+        self, client: httpx.AsyncClient, tmp_path: Path, _clear_session_registry: None
+    ) -> None:
+        """``DELETE /api/maps/{session_id}`` should return 204 and remove from list."""
+        cache_dir = tmp_path / "cache"
+        with _mock_pipeline_stack(cache_dir=cache_dir):
+            gen = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        session_id = gen.json()["session_id"]
+
+        # Mock ServerConfig for delete endpoint too
+        with patch(
+            "portrait_map_lab.server.routes.ServerConfig",
+            return_value=ServerConfig(cache_dir=cache_dir),
+        ):
+            response = await client.delete(f"/api/maps/{session_id}")
+        assert response.status_code == 204
+
+        # Session should be gone from the list
+        sessions_resp = await client.get("/api/sessions")
+        assert len(sessions_resp.json()) == 0
+
+    @pytest.mark.anyio
+    async def test_delete_session_removes_files(
+        self, client: httpx.AsyncClient, tmp_path: Path, _clear_session_registry: None
+    ) -> None:
+        """Deleting a session should remove its cache directory from disk."""
+        cache_dir = tmp_path / "cache"
+        with _mock_pipeline_stack(cache_dir=cache_dir):
+            gen = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        session_id = gen.json()["session_id"]
+        session_dir = cache_dir / session_id
+        assert session_dir.is_dir()
+
+        with patch(
+            "portrait_map_lab.server.routes.ServerConfig",
+            return_value=ServerConfig(cache_dir=cache_dir),
+        ):
+            response = await client.delete(f"/api/maps/{session_id}")
+        assert response.status_code == 204
+        assert not session_dir.exists()
+
+    @pytest.mark.anyio
+    async def test_delete_nonexistent_session_returns_404(
+        self, client: httpx.AsyncClient, _clear_session_registry: None
+    ) -> None:
+        """Deleting a non-existent session should return 404."""
+        response = await client.delete("/api/maps/nonexistent-session-id")
+        assert response.status_code == 404
+
+    @pytest.mark.anyio
+    async def test_delete_path_traversal_returns_404(
+        self, client: httpx.AsyncClient, _clear_session_registry: None
+    ) -> None:
+        """Path traversal in session_id on DELETE should return 404."""
+        response = await client.delete("/api/maps/../../etc")
+        assert response.status_code in (404, 422)

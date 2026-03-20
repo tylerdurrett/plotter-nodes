@@ -33,6 +33,7 @@ __all__ = [
     "GenerateRequest",
     "GenerateResponse",
     "LuminanceConfigSchema",
+    "SessionInfo",
     "MAP_KEY_INFOS",
     "MapKeyInfo",
     "RemapConfigSchema",
@@ -198,6 +199,15 @@ class GenerateResponse(BaseModel):
     session_id: str
     manifest: dict
     base_url: str
+
+
+class SessionInfo(BaseModel):
+    """Metadata for a cached session returned by ``GET /api/sessions``."""
+
+    session_id: str
+    source_image: str
+    created_at: str
+    map_keys: list[str]
 
 
 class MapKeyInfo(BaseModel):

@@ -295,10 +295,18 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 3.4 Implement Sessions List and Delete Endpoints
 
-- [ ] Add `GET /api/sessions` route — list session IDs with metadata (source image name, created_at timestamp, map keys)
-- [ ] Add `DELETE /api/maps/{session_id}` route — delete cache directory, return 204; return 404 if not found
-- [ ] Track sessions in a lightweight in-memory registry (dict of session_id → metadata)
-- [ ] Write tests for both endpoints
+- [x] Add `GET /api/sessions` route — list session IDs with metadata (source image name, created_at timestamp, map keys)
+- [x] Add `DELETE /api/maps/{session_id}` route — delete cache directory, return 204; return 404 if not found
+- [x] Track sessions in a lightweight in-memory registry (dict of session_id → metadata)
+  - Note: Added `SessionInfo` Pydantic model to `schemas.py` with `session_id`, `source_image`, `created_at`, `map_keys` fields
+  - Note: Module-level `_session_registry: dict[str, SessionInfo]` in `routes.py` with `_registry_lock` for thread-safe access
+  - Note: Registry is populated during `generate_maps()` from manifest data; metadata extracted from `manifest_dict` (source_image, created_at, map keys)
+  - Note: `delete_session` checks both registry and disk for existence — handles sessions from previous server runs that aren't in the in-memory registry
+  - Note: Extracted `_resolve_session_dir()` helper from `_resolve_session_file()` to share path-traversal guard logic with `delete_session`, eliminating duplication of security-critical code
+- [x] Write tests for both endpoints
+  - Note: 7 tests in `TestSessionEndpoints` class: empty initially, lists after generate, lists multiple, delete returns 204, delete removes files, nonexistent returns 404, path traversal returns 404
+  - Note: `_clear_session_registry` fixture ensures test isolation by clearing module-level registry before and after each test
+  - Note: All 457 tests pass (3 skipped), no regressions
 
 **Acceptance Criteria:**
 - After generating, `GET /api/sessions` lists the session
