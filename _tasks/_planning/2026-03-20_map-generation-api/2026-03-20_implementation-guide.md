@@ -323,21 +323,30 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 4.1 Implement Disk-Backed Cache Manager
 
-- [ ] Create `src/portrait_map_lab/server/cache.py` with a `SessionCache` class:
+- [x] Create `src/portrait_map_lab/server/cache.py` with a `SessionCache` class:
   - `register(session_id, metadata)` — add to registry with timestamp
   - `get_path(session_id) -> Path` — return cache directory path
   - `exists(session_id) -> bool` — check if session exists on disk
   - `list_sessions() -> list[dict]` — return all sessions with metadata
   - `delete(session_id)` — remove from registry and delete directory
   - `cleanup_expired()` — remove sessions older than TTL
-- [ ] On initialization, scan existing `.cache/api/` subdirectories:
+  - Note: `register()` accepts `SessionInfo` directly (reusing the existing Pydantic model from `schemas.py`); `list_sessions()` returns `list[SessionInfo]` to match the existing endpoint contract
+  - Note: `delete()` returns `bool` (True if session found, False if not) so the route handler can decide whether to raise 404
+  - Note: Added `_rmtree_safe` helper that catches `FileNotFoundError` (concurrent deletion) and `OSError` (permission issues), logging warnings instead of propagating — prevents TOCTOU races and registry/disk inconsistency
+  - Note: Added `_dir_mtime_utc` static helper to extract duplicate mtime-fallback pattern shared between `_session_age_seconds` and `_info_from_manifest`
+  - Note: `cleanup_expired()` snapshots the registry and computes ages outside the lock to avoid holding the lock during potential `stat()` syscalls
+  - Note: Read-only `cache_dir` and `ttl_seconds` properties exposed for route-layer access and testing
+- [x] On initialization, scan existing `.cache/api/` subdirectories:
   - Re-register any directories that contain a `manifest.json`
   - Use file modification time as the creation timestamp
   - This handles server restarts without orphaning sessions
-- [ ] Write unit tests with a temp directory:
+  - Note: `_scan_existing` skips the `is_file()` pre-check — attempts `read_text()` directly and relies on `OSError` handler to avoid TOCTOU
+  - Note: `_info_from_manifest` exceptions (`KeyError`/`TypeError` from malformed manifests) are caught per-session so one bad manifest doesn't abort recovery of other sessions
+- [x] Write unit tests with a temp directory:
   - Register, get, list, delete lifecycle
   - Expired sessions are cleaned up
   - Startup scan re-registers existing sessions
+  - Note: 28 tests across 7 test classes (TestRegisterAndList, TestGetPath, TestExists, TestDelete, TestCleanupExpired, TestStartupScan, TestThreadSafety); all 485 tests pass (3 skipped), no regressions
 
 **Acceptance Criteria:**
 - Sessions created before server restart are discoverable after restart
