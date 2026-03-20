@@ -199,10 +199,13 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 2.5 Config Override Integration Tests
 
-- [ ] Write test: generate with `config.density.gamma = 2.0` and verify the result differs from default
-- [ ] Write test: generate with `config.features.weights = {"eyes": 1.0, "mouth": 0.0}` and verify it's accepted
-- [ ] Write test: generate with nested override `config.flow.etf.blur_sigma = 5.0` and verify it's applied
-- [ ] Write test: generate with no config overrides and verify defaults produce valid output
+- [x] Write test: generate with `config.density.gamma = 2.0` and verify the result differs from default
+  - Note: Verifies via mock call_args that `compose_config.gamma == 2.0` and non-overridden `feature_weight` keeps default
+- [x] Write test: generate with `config.features.weights = {"eyes": 1.0, "mouth": 0.0}` and verify it's accepted
+- [x] Write test: generate with nested override `config.flow.etf.blur_sigma = 5.0` and verify it's applied
+  - Note: Also verifies `structure_sigma` keeps its default value
+- [x] Write test: generate with no config overrides and verify defaults produce valid output
+  - Note: Verifies all optional configs are `None` and `complexity_config` gets a default `ComplexityConfig` (never None)
 
 **Acceptance Criteria:**
 - Config overrides are correctly propagated to pipeline config dataclasses

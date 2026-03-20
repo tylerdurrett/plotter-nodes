@@ -723,3 +723,106 @@ class TestMapFileServing:
         async with _generate_session(client, tmp_path / "cache") as data:
             response = await client.get(f"{data['base_url']}/../../../etc/passwd")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Config override integration tests (Phase 2.5)
+# ---------------------------------------------------------------------------
+
+from portrait_map_lab.models import ComplexityConfig as _ComplexityConfig  # noqa: E402
+
+
+class TestConfigOverrideIntegration:
+    """Verify that config overrides sent via the API are propagated to pipelines."""
+
+    @pytest.mark.anyio
+    async def test_density_gamma_override(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """``config.density.gamma = 2.0`` should reach run_all_pipelines as compose_config."""
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "config": {"density": {"gamma": 2.0}},
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        run_mock = mocks[2]  # run_all_pipelines
+        kwargs = run_mock.call_args.kwargs
+        assert kwargs["compose_config"].gamma == 2.0
+        # Non-overridden fields keep defaults
+        assert kwargs["compose_config"].feature_weight == 0.6
+
+    @pytest.mark.anyio
+    async def test_features_weights_override(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """``config.features.weights`` should reach run_all_pipelines as feature_config."""
+        weights = {"eyes": 1.0, "mouth": 0.0}
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "config": {"features": {"weights": weights}},
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        run_mock = mocks[2]  # run_all_pipelines
+        kwargs = run_mock.call_args.kwargs
+        assert kwargs["feature_config"].weights == weights
+
+    @pytest.mark.anyio
+    async def test_nested_etf_override(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """``config.flow.etf.blur_sigma = 5.0`` should merge onto FlowConfig.etf."""
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "config": {"flow": {"etf": {"blur_sigma": 5.0}}},
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        run_mock = mocks[2]  # run_all_pipelines
+        kwargs = run_mock.call_args.kwargs
+        assert kwargs["flow_config"].etf.blur_sigma == 5.0
+        # Non-overridden ETF fields keep defaults
+        assert kwargs["flow_config"].etf.structure_sigma == 5.0
+
+    @pytest.mark.anyio
+    async def test_no_config_uses_defaults(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """No config overrides should pass None for optional configs and default ComplexityConfig."""
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        run_mock = mocks[2]  # run_all_pipelines
+        kwargs = run_mock.call_args.kwargs
+        assert kwargs["feature_config"] is None
+        assert kwargs["contour_config"] is None
+        assert kwargs["compose_config"] is None
+        assert kwargs["flow_config"] is None
+        assert kwargs["speed_config"] is None
+        # Complexity always gets a default config (never None)
+        cx = kwargs["complexity_config"]
+        assert cx is not None
+        default_cx = _ComplexityConfig()
+        assert cx.metric == default_cx.metric
+        assert cx.sigma == default_cx.sigma
