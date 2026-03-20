@@ -826,3 +826,237 @@ class TestConfigOverrideIntegration:
         default_cx = _ComplexityConfig()
         assert cx.metric == default_cx.metric
         assert cx.sigma == default_cx.sigma
+
+
+# ---------------------------------------------------------------------------
+# Resolver integration tests (Phase 3.3)
+# ---------------------------------------------------------------------------
+
+# Additional patch targets for the resolver path
+_PATCH_RESOLVE = "portrait_map_lab.server.routes.resolve_pipelines"
+_PATCH_RUN_RESOLVED = "portrait_map_lab.server.routes.run_resolved_pipelines"
+_PATCH_BUNDLE_FOR_MAPS = "portrait_map_lab.server.routes.build_export_bundle_for_maps"
+
+
+def _fake_export_bundle_for_keys(keys: list[str]) -> ExportBundle:
+    """Build a minimal ``ExportBundle`` containing entries for the given keys."""
+    entries = []
+    binary_maps = {}
+    for key in keys:
+        entries.append(
+            ExportMapEntry(
+                filename=f"{key}.bin",
+                key=key,
+                dtype="float32",
+                shape=(100, 100),
+                value_range=(0.0, 1.0),
+                description=f"test {key}",
+            )
+        )
+        binary_maps[key] = np.zeros((100, 100), dtype=np.float32).tobytes()
+
+    manifest = ExportManifest(
+        version=1,
+        source_image="test.jpg",
+        width=100,
+        height=100,
+        created_at="2026-03-20T00:00:00+00:00",
+        maps=tuple(entries),
+    )
+    return ExportBundle(manifest=manifest, binary_maps=binary_maps, png_files={})
+
+
+@contextlib.contextmanager
+def _mock_resolver_stack(
+    requested_maps: list[str],
+    resolved_pipelines: set[str],
+    cache_dir: Path | None = None,
+):
+    """Context manager that mocks the resolver path for generate tests.
+
+    Mocks ``resolve_pipelines``, ``run_resolved_pipelines``, and
+    ``build_export_bundle_for_maps`` so the endpoint exercises the
+    granular map selection path without real pipeline execution.
+    """
+    fake_image = np.zeros((100, 100, 3), dtype=np.uint8)
+    bundle = _fake_export_bundle_for_keys(requested_maps)
+    manifest_dict = _manifest_to_dict(bundle.manifest)
+
+    patches = [
+        patch(_PATCH_LOAD, return_value=fake_image),
+        patch(_PATCH_DETECT, return_value=_fake_landmarks()),
+        patch(_PATCH_RESOLVE, return_value=resolved_pipelines),
+        patch(
+            _PATCH_RUN_RESOLVED,
+            return_value={p: MagicMock(name=f"{p}_result") for p in resolved_pipelines},
+        ),
+        patch(_PATCH_BUNDLE_FOR_MAPS, return_value=bundle),
+        patch(_PATCH_MANIFEST, return_value=manifest_dict),
+    ]
+    if cache_dir is not None:
+        patches.append(
+            patch(
+                "portrait_map_lab.server.routes.ServerConfig",
+                return_value=ServerConfig(cache_dir=cache_dir),
+            )
+        )
+
+    with contextlib.ExitStack() as stack:
+        mocks = [stack.enter_context(p) for p in patches]
+        yield mocks
+
+
+class TestResolverIntegration:
+    """Verify that ``POST /api/generate`` uses the resolver when ``maps`` is specified."""
+
+    @pytest.mark.anyio
+    async def test_complexity_only_skips_other_pipelines(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Requesting only ``["complexity"]`` should resolve to the complexity pipeline only."""
+        cache_dir = tmp_path / "cache"
+        maps = ["complexity"]
+        resolved = {"complexity"}
+
+        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir) as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        # Verify resolver was called with the requested maps
+        resolve_mock = mocks[2]  # resolve_pipelines
+        resolve_mock.assert_called_once_with(maps)
+
+        # Verify run_resolved_pipelines was called (not run_all_pipelines)
+        run_resolved_mock = mocks[3]  # run_resolved_pipelines
+        run_resolved_mock.assert_called_once()
+
+        # Verify only complexity.bin exists in the cache
+        data = response.json()
+        session_dir = cache_dir / data["session_id"]
+        assert (session_dir / "complexity.bin").is_file()
+        assert not (session_dir / "density_target.bin").exists()
+        assert not (session_dir / "flow_x.bin").exists()
+
+        # Manifest should only contain the requested map
+        manifest = data["manifest"]
+        manifest_keys = {m["key"] for m in manifest["maps"]}
+        assert manifest_keys == {"complexity"}
+
+    @pytest.mark.anyio
+    async def test_flow_xy_skips_density(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Requesting ``["flow_x", "flow_y"]`` should not run the density pipeline."""
+        cache_dir = tmp_path / "cache"
+        maps = ["flow_x", "flow_y"]
+        resolved = {"contour", "flow"}
+
+        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir) as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        run_resolved_mock = mocks[3]  # run_resolved_pipelines
+        call_kwargs = run_resolved_mock.call_args
+        # The resolved pipeline set passed to run_resolved_pipelines
+        assert call_kwargs[0][2] == {"contour", "flow"}
+
+        # Verify cache contains only the requested maps
+        data = response.json()
+        session_dir = cache_dir / data["session_id"]
+        assert (session_dir / "flow_x.bin").is_file()
+        assert (session_dir / "flow_y.bin").is_file()
+        assert not (session_dir / "density_target.bin").exists()
+
+    @pytest.mark.anyio
+    async def test_density_and_flow_speed_runs_needed_pipelines(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Requesting ``["density_target", "flow_speed"]`` should run all needed pipelines."""
+        cache_dir = tmp_path / "cache"
+        maps = ["density_target", "flow_speed"]
+        resolved = {"features", "contour", "density", "complexity", "flow"}
+
+        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir) as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        run_resolved_mock = mocks[3]
+        call_kwargs = run_resolved_mock.call_args
+        assert call_kwargs[0][2] == resolved
+
+        # Only the two requested maps should be in the manifest
+        data = response.json()
+        manifest_keys = {m["key"] for m in data["manifest"]["maps"]}
+        assert manifest_keys == {"density_target", "flow_speed"}
+
+    @pytest.mark.anyio
+    async def test_empty_maps_uses_all_pipelines(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Omitting ``maps`` should use the full ``run_all_pipelines`` path."""
+        with _mock_pipeline_stack(cache_dir=tmp_path / "cache") as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        # run_all_pipelines should have been called (not run_resolved_pipelines)
+        run_all_mock = mocks[2]  # run_all_pipelines
+        run_all_mock.assert_called_once()
+
+    @pytest.mark.anyio
+    async def test_maps_with_config_overrides(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """Config overrides should be forwarded through the resolver path."""
+        cache_dir = tmp_path / "cache"
+        maps = ["complexity"]
+        resolved = {"complexity"}
+
+        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir) as mocks:
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({
+                    "image_path": "/some/test.jpg",
+                    "maps": maps,
+                    "config": {"complexity": {"metric": "laplacian"}},
+                }),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+
+        run_resolved_mock = mocks[3]
+        call_kwargs = run_resolved_mock.call_args.kwargs
+        assert call_kwargs["complexity_config"].metric == "laplacian"
+
+    @pytest.mark.anyio
+    async def test_resolver_path_returns_base_url(
+        self, client: httpx.AsyncClient, tmp_path: Path
+    ) -> None:
+        """The resolver path should return a valid ``base_url`` for file serving."""
+        cache_dir = tmp_path / "cache"
+        maps = ["complexity"]
+        resolved = {"complexity"}
+
+        with _mock_resolver_stack(maps, resolved, cache_dir=cache_dir):
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
+                headers={"Content-Type": "application/json"},
+            )
+        data = response.json()
+        assert data["base_url"].startswith("/api/maps/")

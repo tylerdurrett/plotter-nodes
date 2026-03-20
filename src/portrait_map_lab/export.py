@@ -14,9 +14,11 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import types
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -25,6 +27,7 @@ from portrait_map_lab.models import ComposedResult, ExportManifest, ExportMapEnt
 __all__ = [
     "ExportBundle",
     "build_export_bundle",
+    "build_export_bundle_for_maps",
     "export_composed_result",
     "save_export_bundle",
 ]
@@ -106,42 +109,34 @@ class ExportBundle:
     png_files: dict[str, Path]
 
 
-def build_export_bundle(
-    result: ComposedResult,
-    source_image_name: str,
-    png_source_dir: Path | None = None,
-) -> ExportBundle:
-    """Build an in-memory export bundle from a composed pipeline result.
+def _extract_maps(
+    result_obj: object,
+    requested_keys: set[str] | None = None,
+) -> tuple[dict[str, bytes], list[ExportMapEntry], int, int]:
+    """Extract and serialize map arrays from a result object.
 
-    This is a pure function (no I/O) so it can be reused by both the CLI
-    disk writer and a future HTTP API layer.
-
-    Parameters
-    ----------
-    result
-        Complete composed pipeline result containing all map data.
-    source_image_name
-        Original image filename (stored in manifest for reference).
-    png_source_dir
-        If provided, scans this directory recursively for ``.png`` files
-        and includes their paths in the bundle for copying during save.
+    Iterates over :data:`_MAP_DEFINITIONS`, resolving each dotted attribute
+    path on *result_obj*.  When *requested_keys* is provided, only maps
+    whose key is in the set are included.
 
     Returns
     -------
-    ExportBundle
-        Bundle containing manifest, binary map data, and PNG file references.
+    tuple
+        ``(binary_maps, map_entries, height, width)`` ready for assembly
+        into an :class:`ExportBundle`.
     """
-    # Extract maps and convert to float32 bytes
     binary_maps: dict[str, bytes] = {}
     map_entries: list[ExportMapEntry] = []
     height: int | None = None
     width: int | None = None
 
     for key, attr_path, value_range, description in _MAP_DEFINITIONS:
+        if requested_keys is not None and key not in requested_keys:
+            continue
         try:
-            array = _resolve_attr(result, attr_path)
+            array = _resolve_attr(result_obj, attr_path)
             if array is None:
-                continue  # Skip None values
+                continue
             if not isinstance(array, np.ndarray):
                 msg = f"Expected ndarray for {attr_path}, got {type(array)}"
                 raise TypeError(msg)
@@ -168,8 +163,38 @@ def build_export_bundle(
             # Skip missing optional fields (e.g., complexity_result is None)
             continue
 
-    assert height is not None
+    assert height is not None, "No map arrays were produced"
     assert width is not None
+
+    return binary_maps, map_entries, height, width
+
+
+def build_export_bundle(
+    result: ComposedResult,
+    source_image_name: str,
+    png_source_dir: Path | None = None,
+) -> ExportBundle:
+    """Build an in-memory export bundle from a composed pipeline result.
+
+    This is a pure function (no I/O) so it can be reused by both the CLI
+    disk writer and a future HTTP API layer.
+
+    Parameters
+    ----------
+    result
+        Complete composed pipeline result containing all map data.
+    source_image_name
+        Original image filename (stored in manifest for reference).
+    png_source_dir
+        If provided, scans this directory recursively for ``.png`` files
+        and includes their paths in the bundle for copying during save.
+
+    Returns
+    -------
+    ExportBundle
+        Bundle containing manifest, binary map data, and PNG file references.
+    """
+    binary_maps, map_entries, height, width = _extract_maps(result)
 
     # Build manifest
     manifest = ExportManifest(
@@ -202,6 +227,80 @@ def build_export_bundle(
         manifest=manifest,
         binary_maps=binary_maps,
         png_files=png_files,
+    )
+
+
+# Mapping from resolver pipeline keys to the attribute names used in
+# _MAP_DEFINITIONS source paths (e.g. "density" → "density_result").
+_RESOLVER_TO_ATTR: dict[str, str] = {
+    "features": "feature_result",
+    "contour": "contour_result",
+    "density": "density_result",
+    "flow": "flow_result",
+    "complexity": "complexity_result",
+}
+
+
+def build_export_bundle_for_maps(
+    pipeline_results: dict[str, Any],
+    requested_maps: list[str],
+    source_image_name: str,
+) -> ExportBundle:
+    """Build an export bundle containing only the *requested_maps*.
+
+    Unlike :func:`build_export_bundle` which operates on a
+    :class:`~portrait_map_lab.models.ComposedResult`, this accepts the
+    ``dict[str, Any]`` returned by
+    :func:`~portrait_map_lab.server.resolver.run_resolved_pipelines` and
+    filters output to the requested map keys.
+
+    Parameters
+    ----------
+    pipeline_results
+        Pipeline name → result object, as returned by ``run_resolved_pipelines``.
+    requested_maps
+        Map keys the caller wants included in the bundle.
+    source_image_name
+        Original image filename (stored in manifest for reference).
+
+    Returns
+    -------
+    ExportBundle
+        Bundle containing manifest and binary data for only the requested maps.
+    """
+    # Build a namespace that _resolve_attr can traverse using the same
+    # dotted paths defined in _MAP_DEFINITIONS.
+    ns = types.SimpleNamespace()
+    for pipeline_name, result_obj in pipeline_results.items():
+        attr_name = _RESOLVER_TO_ATTR.get(pipeline_name)
+        if attr_name:
+            setattr(ns, attr_name, result_obj)
+
+    binary_maps, map_entries, height, width = _extract_maps(
+        ns, requested_keys=set(requested_maps)
+    )
+
+    manifest = ExportManifest(
+        version=1,
+        source_image=source_image_name,
+        width=width,
+        height=height,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        maps=tuple(map_entries),
+    )
+
+    logger.info(
+        "Built partial export bundle: %d/%d maps (%dx%d)",
+        len(map_entries),
+        len(requested_maps),
+        width,
+        height,
+    )
+
+    return ExportBundle(
+        manifest=manifest,
+        binary_maps=binary_maps,
+        png_files={},
     )
 
 

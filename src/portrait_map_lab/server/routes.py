@@ -14,13 +14,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, Upload
 from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from portrait_map_lab.export import _manifest_to_dict, build_export_bundle
+from portrait_map_lab.export import (
+    _manifest_to_dict,
+    build_export_bundle,
+    build_export_bundle_for_maps,
+)
 from portrait_map_lab.landmarks import detect_landmarks
 from portrait_map_lab.models import ComplexityConfig
 from portrait_map_lab.pipelines import run_all_pipelines
 from portrait_map_lab.storage import load_image
 
 from .config import ServerConfig
+from .resolver import resolve_pipelines, run_resolved_pipelines
 from .schemas import (
     MAP_KEY_INFOS,
     GenerateRequest,
@@ -129,7 +134,7 @@ def generate_maps(
 
         # --- validate face is detectable (fast-fail before pipeline lock) ---
         try:
-            detect_landmarks(image)
+            landmarks = detect_landmarks(image)
         except ValueError:
             raise HTTPException(
                 status_code=422, detail="No face detected in image"
@@ -143,25 +148,56 @@ def generate_maps(
         flow_config = build_flow_config(cfg.flow if cfg else None)
         speed_config = build_flow_speed_config(cfg.flow_speed if cfg else None)
 
-        # Always enable complexity so all 7 maps are produced.
-        complexity_config = build_complexity_config(
-            cfg.complexity if cfg else None
-        ) or ComplexityConfig()
+        # --- run pipelines and build bundle ---
+        requested_maps = body.maps or []
 
-        # --- run pipelines under lock ---
-        with _pipeline_lock:
-            result = run_all_pipelines(
-                image,
-                feature_config=feature_config,
-                contour_config=contour_config,
-                compose_config=compose_config,
-                flow_config=flow_config,
-                complexity_config=complexity_config,
-                speed_config=speed_config,
+        if requested_maps:
+            # Granular path: resolve only the pipelines needed for the
+            # requested maps, then build a partial export bundle.
+            pipelines = resolve_pipelines(requested_maps)
+
+            # Only enable complexity if it's in the resolved set.
+            complexity_config: ComplexityConfig | None = None
+            if "complexity" in pipelines:
+                complexity_config = build_complexity_config(
+                    cfg.complexity if cfg else None
+                ) or ComplexityConfig()
+
+            with _pipeline_lock:
+                resolved_results = run_resolved_pipelines(
+                    image,
+                    landmarks,
+                    pipelines,
+                    feature_config=feature_config,
+                    contour_config=contour_config,
+                    compose_config=compose_config,
+                    flow_config=flow_config,
+                    complexity_config=complexity_config,
+                    speed_config=speed_config,
+                )
+
+            bundle = build_export_bundle_for_maps(
+                resolved_results, requested_maps, source_name
             )
+        else:
+            # Full path: run all pipelines (existing behavior).
+            # Always enable complexity so all 7 maps are produced.
+            complexity_config = build_complexity_config(
+                cfg.complexity if cfg else None
+            ) or ComplexityConfig()
 
-        # --- build export bundle ---
-        bundle = build_export_bundle(result, source_name)
+            with _pipeline_lock:
+                result = run_all_pipelines(
+                    image,
+                    feature_config=feature_config,
+                    contour_config=contour_config,
+                    compose_config=compose_config,
+                    flow_config=flow_config,
+                    complexity_config=complexity_config,
+                    speed_config=speed_config,
+                )
+
+            bundle = build_export_bundle(result, source_name)
 
         # --- write to cache ---
         session_id = str(uuid.uuid4())

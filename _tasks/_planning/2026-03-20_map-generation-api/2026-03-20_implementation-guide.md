@@ -274,14 +274,19 @@ pyproject.toml                  # (modified) Add [api] optional dependency
 
 ### 3.3 Integrate Resolver into Generate Endpoint
 
-- [ ] Modify `POST /api/generate` to use the resolver when `maps` is specified
-- [ ] When `maps` is omitted or empty, run all pipelines (existing behavior)
-- [ ] When `maps` is specified, call `run_resolved_pipelines()` instead of `run_all_pipelines()`
-- [ ] Build a partial `ExportBundle` containing only the requested maps (filter `_MAP_DEFINITIONS` to requested keys)
-- [ ] Write integration tests:
+- [x] Modify `POST /api/generate` to use the resolver when `maps` is specified
+- [x] When `maps` is omitted or empty, run all pipelines (existing behavior)
+- [x] When `maps` is specified, call `run_resolved_pipelines()` instead of `run_all_pipelines()`
+- [x] Build a partial `ExportBundle` containing only the requested maps (filter `_MAP_DEFINITIONS` to requested keys)
+  - Note: Added `build_export_bundle_for_maps()` to `export.py` that accepts resolver results dict and requested map keys; uses `_RESOLVER_TO_ATTR` mapping + `SimpleNamespace` adapter to reuse `_resolve_attr` for dotted path resolution
+  - Note: Extracted shared `_extract_maps()` helper from `build_export_bundle` and `build_export_bundle_for_maps` to eliminate duplicated map extraction/serialization logic (~50 lines)
+  - Note: Landmarks from the validation `detect_landmarks()` call are now saved and passed to `run_resolved_pipelines`, avoiding redundant recomputation in the resolver path
+  - Note: Complexity config is only built when `"complexity"` is in the resolved pipeline set, avoiding unnecessary config construction for partial requests
+- [x] Write integration tests:
   - Request only `["complexity"]` — verify features/contour/density/flow pipelines are NOT run (test by checking that only `complexity.bin` exists in cache dir)
   - Request `["flow_x", "flow_y"]` — verify density pipeline is not run
   - Request `["density_target", "flow_speed"]` — verify all needed pipelines run
+  - Note: 6 integration tests total: complexity-only, flow_xy, density+flow_speed, empty-maps-uses-all, config-overrides-forwarded, base_url-returned; shared `_mock_resolver_stack` context manager for the resolver code path; all 450 tests pass (3 skipped), no regressions
 
 **Acceptance Criteria:**
 - Requesting `["complexity"]` completes significantly faster than requesting all maps
