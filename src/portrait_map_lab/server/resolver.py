@@ -60,6 +60,12 @@ _MAP_DEPENDENCIES: dict[str, frozenset[str]] = {
 }
 
 
+assert set(_MAP_DEPENDENCIES.keys()) == VALID_MAP_KEYS, (
+    f"_MAP_DEPENDENCIES keys {sorted(_MAP_DEPENDENCIES.keys())} "
+    f"do not match VALID_MAP_KEYS {sorted(VALID_MAP_KEYS)}"
+)
+
+
 def resolve_pipelines(requested_maps: list[str]) -> set[str]:
     """Determine which pipelines are needed for *requested_maps*.
 

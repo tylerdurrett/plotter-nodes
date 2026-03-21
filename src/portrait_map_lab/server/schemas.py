@@ -13,12 +13,9 @@ from portrait_map_lab.models import (
     ComplexityConfig,
     ComposeConfig,
     ContourConfig,
-    ETFConfig,
     FlowConfig,
     FlowSpeedConfig,
-    LuminanceConfig,
     PipelineConfig,
-    RemapConfig,
 )
 
 __all__ = [
@@ -242,24 +239,8 @@ def _merge_onto(schema: BaseModel, target: object) -> None:
             setattr(target, name, value)
 
 
-def _merge_remap(schema: RemapConfigSchema | None, target: RemapConfig) -> RemapConfig:
-    """Merge remap overrides onto a default ``RemapConfig``."""
-    if schema is not None:
-        _merge_onto(schema, target)
-    return target
-
-
-def _merge_luminance(
-    schema: LuminanceConfigSchema | None, target: LuminanceConfig
-) -> LuminanceConfig:
-    """Merge luminance overrides onto a default ``LuminanceConfig``."""
-    if schema is not None:
-        _merge_onto(schema, target)
-    return target
-
-
-def _merge_etf(schema: ETFConfigSchema | None, target: ETFConfig) -> ETFConfig:
-    """Merge ETF overrides onto a default ``ETFConfig``."""
+def _merge_sub(schema: BaseModel | None, target: object) -> object:
+    """Merge optional sub-config overrides onto a default dataclass instance."""
     if schema is not None:
         _merge_onto(schema, target)
     return target
@@ -277,7 +258,7 @@ def build_pipeline_config(
     cfg = PipelineConfig()
     _merge_onto(schema, cfg)
     if schema.remap is not None:
-        _merge_remap(schema.remap, cfg.remap)
+        _merge_sub(schema.remap, cfg.remap)
     return cfg
 
 
@@ -290,7 +271,7 @@ def build_contour_config(
     cfg = ContourConfig()
     _merge_onto(schema, cfg)
     if schema.remap is not None:
-        _merge_remap(schema.remap, cfg.remap)
+        _merge_sub(schema.remap, cfg.remap)
     return cfg
 
 
@@ -303,7 +284,7 @@ def build_compose_config(
     cfg = ComposeConfig()
     _merge_onto(schema, cfg)
     if schema.luminance is not None:
-        _merge_luminance(schema.luminance, cfg.luminance)
+        _merge_sub(schema.luminance, cfg.luminance)
     return cfg
 
 
@@ -327,7 +308,7 @@ def build_flow_config(
     cfg = FlowConfig()
     _merge_onto(schema, cfg)
     if schema.etf is not None:
-        _merge_etf(schema.etf, cfg.etf)
+        _merge_sub(schema.etf, cfg.etf)
     return cfg
 
 

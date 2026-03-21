@@ -29,6 +29,7 @@ __all__ = [
     "build_export_bundle",
     "build_export_bundle_for_maps",
     "export_composed_result",
+    "manifest_to_dict",
     "save_export_bundle",
 ]
 
@@ -146,7 +147,7 @@ def _extract_maps(
             assert height is not None
             assert width is not None
 
-            float32_array = array.astype(np.float32)
+            float32_array = array.astype(np.float32, copy=False)
             binary_maps[key] = float32_array.tobytes()
 
             map_entries.append(
@@ -304,7 +305,7 @@ def build_export_bundle_for_maps(
     )
 
 
-def _manifest_to_dict(manifest: ExportManifest) -> dict:
+def manifest_to_dict(manifest: ExportManifest) -> dict:
     """Convert an ExportManifest to a JSON-serializable dict.
 
     Uses ``dataclasses.asdict`` but converts tuples to lists for JSON
@@ -362,7 +363,7 @@ def save_export_bundle(
 
     # Write manifest
     manifest_path = export_dir / "manifest.json"
-    manifest_dict = _manifest_to_dict(bundle.manifest)
+    manifest_dict = manifest_to_dict(bundle.manifest)
     manifest_path.write_text(json.dumps(manifest_dict, indent=2) + "\n")
     logger.info("Saved manifest: %s", manifest_path)
 

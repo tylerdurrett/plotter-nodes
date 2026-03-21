@@ -255,13 +255,13 @@ class TestManifestJsonRoundtrip:
     """Tests for manifest JSON serialization."""
 
     def test_manifest_roundtrips_through_json(self):
-        from portrait_map_lab.export import _manifest_to_dict
+        from portrait_map_lab.export import manifest_to_dict
 
         result = _make_synthetic_composed_result(height=48, width=64)
         bundle = build_export_bundle(result, "test.jpg")
 
         # Serialize to JSON string and back
-        json_str = json.dumps(_manifest_to_dict(bundle.manifest))
+        json_str = json.dumps(manifest_to_dict(bundle.manifest))
         loaded = json.loads(json_str)
 
         assert loaded["version"] == 1
@@ -271,11 +271,11 @@ class TestManifestJsonRoundtrip:
         assert len(loaded["maps"]) == 5
 
     def test_manifest_map_entries_have_all_fields(self):
-        from portrait_map_lab.export import _manifest_to_dict
+        from portrait_map_lab.export import manifest_to_dict
 
         result = _make_synthetic_composed_result()
         bundle = build_export_bundle(result, "test.jpg")
-        data = _manifest_to_dict(bundle.manifest)
+        data = manifest_to_dict(bundle.manifest)
 
         required_fields = {"filename", "key", "dtype", "shape", "value_range", "description"}
         for entry in data["maps"]:

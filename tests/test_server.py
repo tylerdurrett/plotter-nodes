@@ -14,7 +14,7 @@ import httpx
 import numpy as np
 import pytest
 
-from portrait_map_lab.export import ExportBundle, _manifest_to_dict
+from portrait_map_lab.export import ExportBundle, manifest_to_dict
 from portrait_map_lab.models import ExportManifest, ExportMapEntry, LandmarkResult
 from portrait_map_lab.server.cache import SessionCache
 from portrait_map_lab.server.config import ServerConfig
@@ -333,7 +333,7 @@ def _fake_export_bundle() -> ExportBundle:
 
 def _fake_manifest_dict() -> dict:
     """Return a manifest dict derived from ``_fake_export_bundle``."""
-    return _manifest_to_dict(_fake_export_bundle().manifest)
+    return manifest_to_dict(_fake_export_bundle().manifest)
 
 
 # Patch targets — these are the module paths where routes.py imports them.
@@ -341,7 +341,7 @@ _PATCH_LOAD = "portrait_map_lab.server.routes.load_image"
 _PATCH_DETECT = "portrait_map_lab.server.routes.detect_landmarks"
 _PATCH_RUN = "portrait_map_lab.server.routes.run_all_pipelines"
 _PATCH_BUNDLE = "portrait_map_lab.server.routes.build_export_bundle"
-_PATCH_MANIFEST = "portrait_map_lab.server.routes._manifest_to_dict"
+_PATCH_MANIFEST = "portrait_map_lab.server.routes.manifest_to_dict"
 
 
 @contextlib.contextmanager
@@ -887,7 +887,7 @@ def _mock_resolver_stack(
     """
     fake_image = np.zeros((100, 100, 3), dtype=np.uint8)
     bundle = _fake_export_bundle_for_keys(requested_maps)
-    manifest_dict = _manifest_to_dict(bundle.manifest)
+    manifest_dict = manifest_to_dict(bundle.manifest)
 
     patches = [
         patch(_PATCH_LOAD, return_value=fake_image),

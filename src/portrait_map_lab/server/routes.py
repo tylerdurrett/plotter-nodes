@@ -15,9 +15,9 @@ from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from portrait_map_lab.export import (
-    _manifest_to_dict,
     build_export_bundle,
     build_export_bundle_for_maps,
+    manifest_to_dict,
 )
 from portrait_map_lab.landmarks import detect_landmarks
 from portrait_map_lab.models import ComplexityConfig
@@ -215,7 +215,7 @@ def generate_maps(
         for key, data in bundle.binary_maps.items():
             (session_dir / f"{key}.bin").write_bytes(data)
 
-        manifest_dict = _manifest_to_dict(bundle.manifest)
+        manifest_dict = manifest_to_dict(bundle.manifest)
         (session_dir / "manifest.json").write_text(
             json.dumps(manifest_dict, indent=2) + "\n"
         )
@@ -236,9 +236,9 @@ def generate_maps(
         # Register session metadata in the cache.
         info = SessionInfo(
             session_id=session_id,
-            source_image=manifest_dict.get("source_image", source_name),
-            created_at=manifest_dict.get("created_at", ""),
-            map_keys=[m["key"] for m in manifest_dict.get("maps", [])],
+            source_image=bundle.manifest.source_image,
+            created_at=bundle.manifest.created_at,
+            map_keys=[m.key for m in bundle.manifest.maps],
             persistent=bool(body.persist),
         )
         cache.register(info)
