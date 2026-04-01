@@ -30,6 +30,7 @@ __all__ = [
     "GenerateRequest",
     "GenerateResponse",
     "LuminanceConfigSchema",
+    "PreviewInfo",
     "SessionInfo",
     "MAP_KEY_INFOS",
     "MapKeyInfo",
@@ -190,12 +191,21 @@ class GenerateRequest(BaseModel):
         return v
 
 
+class PreviewInfo(BaseModel):
+    """Metadata for a single preview PNG file."""
+
+    category: str
+    name: str
+    url: str
+
+
 class GenerateResponse(BaseModel):
     """Response body for ``POST /api/generate``."""
 
     session_id: str
     manifest: dict
     base_url: str
+    previews: list[PreviewInfo] = []
 
 
 class SessionInfo(BaseModel):
@@ -206,6 +216,7 @@ class SessionInfo(BaseModel):
     created_at: str
     map_keys: list[str]
     persistent: bool = False
+    previews: list[PreviewInfo] = []
 
 
 class MapKeyInfo(BaseModel):

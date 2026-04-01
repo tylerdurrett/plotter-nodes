@@ -25,6 +25,7 @@ from portrait_map_lab.pipelines import run_all_pipelines
 from portrait_map_lab.storage import load_image
 
 from .cache import SessionCache
+from .previews import generate_previews_full, generate_previews_resolved
 from .resolver import resolve_pipelines, run_resolved_pipelines
 from .schemas import (
     MAP_KEY_INFOS,
@@ -220,9 +221,26 @@ def generate_maps(
             json.dumps(manifest_dict, indent=2) + "\n"
         )
 
+        # --- generate preview PNGs ---
+        previews_dir = session_dir / "previews"
+        try:
+            if requested_maps:
+                preview_list = generate_previews_resolved(
+                    resolved_results, image, previews_dir
+                )
+            else:
+                preview_list = generate_previews_full(result, image, previews_dir)
+        except Exception:
+            # Preview generation is supplementary — don't block the
+            # primary .bin output if it fails.
+            logger.exception(
+                "Failed to generate preview PNGs for session %s", session_id
+            )
+            preview_list = []
+
         logger.info(
-            "Session %s: wrote %d maps to %s",
-            session_id, len(bundle.binary_maps), session_dir,
+            "Session %s: wrote %d maps and %d previews to %s",
+            session_id, len(bundle.binary_maps), len(preview_list), session_dir,
         )
 
         # --- persist to output directory if requested ---
@@ -240,6 +258,7 @@ def generate_maps(
             created_at=bundle.manifest.created_at,
             map_keys=[m.key for m in bundle.manifest.maps],
             persistent=bool(body.persist),
+            previews=preview_list,
         )
         cache.register(info)
 
@@ -247,6 +266,7 @@ def generate_maps(
             session_id=session_id,
             manifest=manifest_dict,
             base_url=f"/api/maps/{session_id}",
+            previews=preview_list,
         )
     finally:
         if temp_path is not None:
@@ -301,12 +321,14 @@ def get_session_manifest(session_id: str, request: Request) -> Response:
     return Response(content=file_path.read_bytes(), media_type="application/json")
 
 
-@router.get("/maps/{session_id}/{filename}")
+@router.get("/maps/{session_id}/{filename:path}")
 def get_session_file(session_id: str, filename: str, request: Request) -> FileResponse:
-    """Serve a binary map file from a cached session."""
+    """Serve a binary map or preview PNG file from a cached session."""
     cache = _get_cache(request)
     file_path = _resolve_session_file(session_id, filename, cache.cache_dir)
-    return FileResponse(file_path, media_type="application/octet-stream")
+    # Serve PNGs with correct content type for browser rendering
+    media_type = "image/png" if file_path.suffix == ".png" else "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type)
 
 
 @router.get("/sessions")

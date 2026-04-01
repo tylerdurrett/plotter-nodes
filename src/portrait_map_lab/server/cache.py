@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import ServerConfig
+from .previews import discover_previews
 from .schemas import SessionInfo
 
 __all__ = ["SessionCache"]
@@ -256,9 +257,14 @@ class SessionCache:
             mtime = SessionCache._dir_mtime_utc(session_dir)
             created_at = mtime.isoformat() if mtime is not None else ""
 
+        # Discover any preview PNGs already on disk (from a prior run).
+        previews_dir = session_dir / "previews"
+        previews = discover_previews(previews_dir)
+
         return SessionInfo(
             session_id=session_id,
             source_image=manifest.get("source_image", ""),
             created_at=created_at,
             map_keys=[m["key"] for m in manifest.get("maps", [])],
+            previews=previews,
         )

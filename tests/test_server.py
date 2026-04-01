@@ -135,6 +135,7 @@ from portrait_map_lab.server.schemas import (  # noqa: E402
     GenerateRequest,
     GenerateResponse,
     MapKeyInfo,
+    PreviewInfo,
 )
 
 
@@ -342,6 +343,13 @@ _PATCH_DETECT = "portrait_map_lab.server.routes.detect_landmarks"
 _PATCH_RUN = "portrait_map_lab.server.routes.run_all_pipelines"
 _PATCH_BUNDLE = "portrait_map_lab.server.routes.build_export_bundle"
 _PATCH_MANIFEST = "portrait_map_lab.server.routes.manifest_to_dict"
+_PATCH_PREVIEWS_FULL = "portrait_map_lab.server.routes.generate_previews_full"
+_PATCH_PREVIEWS_RESOLVED = "portrait_map_lab.server.routes.generate_previews_resolved"
+
+
+_FAKE_PREVIEWS = [
+    PreviewInfo(category="density", name="density_target", url="previews/density/density_target.png"),
+]
 
 
 @contextlib.contextmanager
@@ -362,6 +370,7 @@ def _mock_pipeline_stack():
         patch(_PATCH_RUN, return_value=sentinel_result),
         patch(_PATCH_BUNDLE, return_value=bundle),
         patch(_PATCH_MANIFEST, return_value=manifest_dict),
+        patch(_PATCH_PREVIEWS_FULL, return_value=list(_FAKE_PREVIEWS)),
     ]
 
     with contextlib.ExitStack() as stack:
@@ -899,6 +908,7 @@ def _mock_resolver_stack(
         ),
         patch(_PATCH_BUNDLE_FOR_MAPS, return_value=bundle),
         patch(_PATCH_MANIFEST, return_value=manifest_dict),
+        patch(_PATCH_PREVIEWS_RESOLVED, return_value=list(_FAKE_PREVIEWS)),
     ]
 
     with contextlib.ExitStack() as stack:
@@ -1523,3 +1533,115 @@ class TestPersistParameter:
         sessions = cache.list_sessions()
         assert len(sessions) == 1
         assert sessions[0].persistent is False
+
+
+# ---------------------------------------------------------------------------
+# Preview serving tests
+# ---------------------------------------------------------------------------
+
+
+class TestPreviewServing:
+    """Verify serving of preview PNG files from session directories."""
+
+    @pytest.mark.anyio
+    async def test_generate_response_includes_previews(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """Generate response should include a previews array."""
+        with _mock_pipeline_stack():
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert "previews" in data
+        assert len(data["previews"]) > 0
+        preview = data["previews"][0]
+        assert "category" in preview
+        assert "name" in preview
+        assert "url" in preview
+
+    @pytest.mark.anyio
+    async def test_sessions_list_includes_previews(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """Sessions list should include previews for each session."""
+        with _mock_pipeline_stack():
+            await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        sessions_response = await client.get("/api/sessions")
+        assert sessions_response.status_code == 200
+        sessions = sessions_response.json()
+        assert len(sessions) == 1
+        assert "previews" in sessions[0]
+
+    @pytest.mark.anyio
+    async def test_preview_png_served_with_correct_content_type(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """A PNG file in a session's previews/ dir should be served as image/png."""
+        # Create a session with a preview file on disk
+        with _mock_pipeline_stack():
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        session_id = response.json()["session_id"]
+
+        # Write a fake PNG to the session's previews directory
+        cache: SessionCache = client._transport.app.state.cache  # type: ignore[attr-defined]
+        session_dir = cache.get_path(session_id)
+        preview_path = session_dir / "previews" / "density"
+        preview_path.mkdir(parents=True, exist_ok=True)
+        # Minimal valid PNG header
+        (preview_path / "density_target.png").write_bytes(
+            b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+        )
+
+        file_response = await client.get(
+            f"/api/maps/{session_id}/previews/density/density_target.png"
+        )
+        assert file_response.status_code == 200
+        assert file_response.headers["content-type"] == "image/png"
+
+    @pytest.mark.anyio
+    async def test_path_traversal_blocked_in_preview_path(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """Path traversal attempts in preview paths should return 404."""
+        with _mock_pipeline_stack():
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg"}),
+                headers={"Content-Type": "application/json"},
+            )
+        session_id = response.json()["session_id"]
+
+        traversal_response = await client.get(
+            f"/api/maps/{session_id}/previews/../../etc/passwd"
+        )
+        assert traversal_response.status_code == 404
+
+    @pytest.mark.anyio
+    async def test_resolver_path_includes_previews(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        """Generate via resolver path should also include previews."""
+        maps = ["complexity"]
+        resolved = {"complexity"}
+        with _mock_resolver_stack(maps, resolved):
+            response = await client.post(
+                "/api/generate",
+                content=json.dumps({"image_path": "/some/test.jpg", "maps": maps}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert "previews" in data
+        assert len(data["previews"]) > 0
