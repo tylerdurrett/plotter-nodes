@@ -17,6 +17,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from portrait_map_lab.export import (
     build_export_bundle,
     build_export_bundle_for_maps,
+    build_intermediate_export_bundle,
     manifest_to_dict,
 )
 from portrait_map_lab.landmarks import detect_landmarks
@@ -158,7 +159,8 @@ def generate_maps(
         speed_config = build_flow_speed_config(cfg.flow_speed if cfg else None)
 
         # --- run pipelines and build bundle ---
-        requested_maps = body.maps or []
+        # Intermediates mode needs all pipelines, so ignore maps filter.
+        requested_maps = [] if body.mode == "intermediates" else (body.maps or [])
 
         if requested_maps:
             # Granular path: resolve only the pipelines needed for the
@@ -206,7 +208,22 @@ def generate_maps(
                     speed_config=speed_config,
                 )
 
-            bundle = build_export_bundle(result, source_name)
+            # Intermediates mode: export raw pipeline outputs for
+            # client-side composition instead of composed final maps.
+            if body.mode == "intermediates":
+                pipeline_dict = {
+                    "features": result.feature_result,
+                    "contour": result.contour_result,
+                    "density": result.density_result,
+                    "flow": result.flow_result,
+                }
+                if result.complexity_result is not None:
+                    pipeline_dict["complexity"] = result.complexity_result
+                bundle = build_intermediate_export_bundle(
+                    pipeline_dict, source_name
+                )
+            else:
+                bundle = build_export_bundle(result, source_name)
 
         # --- write to cache ---
         session_id = str(uuid.uuid4())

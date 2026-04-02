@@ -248,6 +248,111 @@ class TestSchemas:
         assert info.value_range == [-1.0, 1.0]
         assert info.description == "X component"
 
+    # -- Intermediates mode ------------------------------------------------
+
+    def test_mode_intermediates_accepted(self) -> None:
+        """mode='intermediates' should be accepted."""
+        req = GenerateRequest(mode="intermediates")
+        assert req.mode == "intermediates"
+
+    def test_mode_none_accepted(self) -> None:
+        """mode=None (default) should be accepted."""
+        req = GenerateRequest()
+        assert req.mode is None
+
+    def test_mode_invalid_rejected(self) -> None:
+        """Invalid mode values should be rejected by the pattern validator."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            GenerateRequest(mode="bogus")
+
+    def test_valid_intermediate_keys_exist(self) -> None:
+        """VALID_INTERMEDIATE_KEYS should contain the 9 expected keys."""
+        from portrait_map_lab.server.schemas import VALID_INTERMEDIATE_KEYS
+        expected = {
+            "feature_influence", "contour_influence", "tonal",
+            "etf_flow_x", "etf_flow_y",
+            "contour_flow_x", "contour_flow_y",
+            "coherence", "complexity",
+        }
+        assert VALID_INTERMEDIATE_KEYS == expected
+
+
+class TestIntermediateExportBundle:
+    """Verify build_intermediate_export_bundle produces v2 manifests."""
+
+    def test_builds_v2_manifest(self) -> None:
+        """Intermediate bundle should have manifest version 2."""
+        from portrait_map_lab.export import build_intermediate_export_bundle
+
+        # Create minimal mock pipeline results with numpy arrays
+        h, w = 4, 4
+        mock_results = self._make_mock_results(h, w)
+        bundle = build_intermediate_export_bundle(mock_results, "test.jpg")
+
+        assert bundle.manifest.version == 2
+        assert bundle.manifest.width == w
+        assert bundle.manifest.height == h
+        assert bundle.manifest.source_image == "test.jpg"
+
+    def test_produces_9_intermediate_maps(self) -> None:
+        """Should produce exactly 9 intermediate map entries."""
+        from portrait_map_lab.export import build_intermediate_export_bundle
+
+        h, w = 4, 4
+        mock_results = self._make_mock_results(h, w)
+        bundle = build_intermediate_export_bundle(mock_results, "test.jpg")
+
+        assert len(bundle.manifest.maps) == 9
+        keys = {m.key for m in bundle.manifest.maps}
+        expected = {
+            "feature_influence", "contour_influence", "tonal",
+            "etf_flow_x", "etf_flow_y",
+            "contour_flow_x", "contour_flow_y",
+            "coherence", "complexity",
+        }
+        assert keys == expected
+
+    def test_binary_maps_have_correct_size(self) -> None:
+        """Each binary map should be h*w*4 bytes (float32)."""
+        from portrait_map_lab.export import build_intermediate_export_bundle
+
+        h, w = 8, 6
+        mock_results = self._make_mock_results(h, w)
+        bundle = build_intermediate_export_bundle(mock_results, "test.jpg")
+
+        expected_bytes = h * w * 4  # float32
+        for key, data in bundle.binary_maps.items():
+            assert len(data) == expected_bytes, f"{key} has wrong size"
+
+    @staticmethod
+    def _make_mock_results(h: int, w: int) -> dict:
+        """Build mock pipeline results dict with proper numpy arrays."""
+        from types import SimpleNamespace
+
+        feature_result = SimpleNamespace(combined=np.zeros((h, w), dtype=np.float64))
+        contour_result = SimpleNamespace(influence_map=np.zeros((h, w), dtype=np.float64))
+        density_result = SimpleNamespace(tonal_target=np.zeros((h, w), dtype=np.float64))
+        etf = SimpleNamespace(
+            tangent_x=np.zeros((h, w), dtype=np.float64),
+            tangent_y=np.zeros((h, w), dtype=np.float64),
+            coherence=np.zeros((h, w), dtype=np.float64),
+        )
+        flow_result = SimpleNamespace(
+            etf=etf,
+            contour_flow_x=np.zeros((h, w), dtype=np.float64),
+            contour_flow_y=np.zeros((h, w), dtype=np.float64),
+        )
+        complexity_result = SimpleNamespace(complexity=np.zeros((h, w), dtype=np.float64))
+
+        return {
+            "features": feature_result,
+            "contour": contour_result,
+            "density": density_result,
+            "flow": flow_result,
+            "complexity": complexity_result,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Map keys endpoint tests (Phase 2.2)

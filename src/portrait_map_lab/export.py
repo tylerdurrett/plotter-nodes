@@ -28,6 +28,7 @@ __all__ = [
     "ExportBundle",
     "build_export_bundle",
     "build_export_bundle_for_maps",
+    "build_intermediate_export_bundle",
     "export_composed_result",
     "manifest_to_dict",
     "save_export_bundle",
@@ -81,6 +82,65 @@ _MAP_DEFINITIONS: list[tuple[str, str, tuple[float, float], str]] = [
     ),
 ]
 
+# Intermediate map definitions — raw pipeline outputs before composition.
+# Used by the API when mode="intermediates" to let the client composite.
+_INTERMEDIATE_MAP_DEFINITIONS: list[tuple[str, str, tuple[float, float], str]] = [
+    (
+        "feature_influence",
+        "feature_result.combined",
+        (0.0, 1.0),
+        "Remapped feature distance field",
+    ),
+    (
+        "contour_influence",
+        "contour_result.influence_map",
+        (0.0, 1.0),
+        "Remapped contour distance field",
+    ),
+    (
+        "tonal",
+        "density_result.tonal_target",
+        (0.0, 1.0),
+        "CLAHE-processed inverted luminance",
+    ),
+    (
+        "etf_flow_x",
+        "flow_result.etf.tangent_x",
+        (-1.0, 1.0),
+        "Raw ETF tangent field X component",
+    ),
+    (
+        "etf_flow_y",
+        "flow_result.etf.tangent_y",
+        (-1.0, 1.0),
+        "Raw ETF tangent field Y component",
+    ),
+    (
+        "contour_flow_x",
+        "flow_result.contour_flow_x",
+        (-1.0, 1.0),
+        "Contour SDF gradient flow X component",
+    ),
+    (
+        "contour_flow_y",
+        "flow_result.contour_flow_y",
+        (-1.0, 1.0),
+        "Contour SDF gradient flow Y component",
+    ),
+    (
+        "coherence",
+        "flow_result.etf.coherence",
+        (0.0, 1.0),
+        "ETF coherence",
+    ),
+    (
+        "complexity",
+        "complexity_result.complexity",
+        (0.0, 1.0),
+        "Gradient/laplacian complexity",
+    ),
+]
+
 
 def _resolve_attr(obj: object, dotted_path: str) -> object:
     """Resolve a dotted attribute path like 'flow_result.etf.coherence'."""
@@ -113,12 +173,14 @@ class ExportBundle:
 def _extract_maps(
     result_obj: object,
     requested_keys: set[str] | None = None,
+    definitions: list[tuple[str, str, tuple[float, float], str]] | None = None,
 ) -> tuple[dict[str, bytes], list[ExportMapEntry], int, int]:
     """Extract and serialize map arrays from a result object.
 
-    Iterates over :data:`_MAP_DEFINITIONS`, resolving each dotted attribute
-    path on *result_obj*.  When *requested_keys* is provided, only maps
-    whose key is in the set are included.
+    Iterates over *definitions* (defaults to :data:`_MAP_DEFINITIONS`),
+    resolving each dotted attribute path on *result_obj*.  When
+    *requested_keys* is provided, only maps whose key is in the set are
+    included.
 
     Returns
     -------
@@ -126,12 +188,15 @@ def _extract_maps(
         ``(binary_maps, map_entries, height, width)`` ready for assembly
         into an :class:`ExportBundle`.
     """
+    if definitions is None:
+        definitions = _MAP_DEFINITIONS
+
     binary_maps: dict[str, bytes] = {}
     map_entries: list[ExportMapEntry] = []
     height: int | None = None
     width: int | None = None
 
-    for key, attr_path, value_range, description in _MAP_DEFINITIONS:
+    for key, attr_path, value_range, description in definitions:
         if requested_keys is not None and key not in requested_keys:
             continue
         try:
@@ -242,6 +307,19 @@ _RESOLVER_TO_ATTR: dict[str, str] = {
 }
 
 
+def _build_pipeline_namespace(
+    pipeline_results: dict[str, Any],
+) -> types.SimpleNamespace:
+    """Build a namespace that _resolve_attr can traverse using the same
+    dotted paths defined in _MAP_DEFINITIONS / _INTERMEDIATE_MAP_DEFINITIONS."""
+    ns = types.SimpleNamespace()
+    for pipeline_name, result_obj in pipeline_results.items():
+        attr_name = _RESOLVER_TO_ATTR.get(pipeline_name)
+        if attr_name:
+            setattr(ns, attr_name, result_obj)
+    return ns
+
+
 def build_export_bundle_for_maps(
     pipeline_results: dict[str, Any],
     requested_maps: list[str],
@@ -269,13 +347,7 @@ def build_export_bundle_for_maps(
     ExportBundle
         Bundle containing manifest and binary data for only the requested maps.
     """
-    # Build a namespace that _resolve_attr can traverse using the same
-    # dotted paths defined in _MAP_DEFINITIONS.
-    ns = types.SimpleNamespace()
-    for pipeline_name, result_obj in pipeline_results.items():
-        attr_name = _RESOLVER_TO_ATTR.get(pipeline_name)
-        if attr_name:
-            setattr(ns, attr_name, result_obj)
+    ns = _build_pipeline_namespace(pipeline_results)
 
     binary_maps, map_entries, height, width = _extract_maps(
         ns, requested_keys=set(requested_maps)
@@ -294,6 +366,44 @@ def build_export_bundle_for_maps(
         "Built partial export bundle: %d/%d maps (%dx%d)",
         len(map_entries),
         len(requested_maps),
+        width,
+        height,
+    )
+
+    return ExportBundle(
+        manifest=manifest,
+        binary_maps=binary_maps,
+        png_files={},
+    )
+
+
+def build_intermediate_export_bundle(
+    pipeline_results: dict[str, Any],
+    source_image_name: str,
+) -> ExportBundle:
+    """Build an export bundle with intermediate maps (manifest version 2).
+
+    Returns the raw pipeline outputs before composition, enabling
+    client-side realtime remixing.
+    """
+    ns = _build_pipeline_namespace(pipeline_results)
+
+    binary_maps, map_entries, height, width = _extract_maps(
+        ns, definitions=_INTERMEDIATE_MAP_DEFINITIONS
+    )
+
+    manifest = ExportManifest(
+        version=2,
+        source_image=source_image_name,
+        width=width,
+        height=height,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        maps=tuple(map_entries),
+    )
+
+    logger.info(
+        "Built intermediate export bundle: %d maps (%dx%d)",
+        len(map_entries),
         width,
         height,
     )

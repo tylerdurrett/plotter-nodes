@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-from portrait_map_lab.export import _MAP_DEFINITIONS
+from portrait_map_lab.export import _INTERMEDIATE_MAP_DEFINITIONS, _MAP_DEFINITIONS
 from portrait_map_lab.models import (
     ComplexityConfig,
     ComposeConfig,
@@ -46,6 +46,11 @@ __all__ = [
 
 # Canonical set of valid map keys, derived from export definitions.
 VALID_MAP_KEYS: frozenset[str] = frozenset(key for key, *_ in _MAP_DEFINITIONS)
+
+# Canonical set of valid intermediate map keys (v2 manifests).
+VALID_INTERMEDIATE_KEYS: frozenset[str] = frozenset(
+    key for key, *_ in _INTERMEDIATE_MAP_DEFINITIONS
+)
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +180,7 @@ class GenerateRequest(BaseModel):
     maps: list[str] | None = None
     persist: str | None = Field(None, pattern=r"^[a-zA-Z0-9_-]+$")
     config: GenerateConfigSchema | None = None
+    mode: str | None = Field(None, pattern=r"^(intermediates)$")
 
     @field_validator("maps")
     @classmethod
