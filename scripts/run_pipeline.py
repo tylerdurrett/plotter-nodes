@@ -627,6 +627,12 @@ def parse_args() -> argparse.Namespace:
         default=_serve_defaults.port,
         help="Port number for the server",
     )
+    serve_parser.add_argument(
+        "--reload",
+        action="store_true",
+        default=False,
+        help="Enable auto-reload on source changes (dev mode)",
+    )
 
     return parser.parse_args()
 
@@ -1388,8 +1394,22 @@ def handle_serve(args: argparse.Namespace) -> int:
         return 1
 
     config = ServerConfig(host=args.host, port=args.port)
-    app = create_app(config)
-    uvicorn.run(app, host=config.host, port=config.port)
+
+    if args.reload:
+        # Reload mode requires an import string, not an app instance.
+        # uvicorn will call create_app() via the factory on each reload.
+        uvicorn.run(
+            "portrait_map_lab.server:create_app",
+            factory=True,
+            host=config.host,
+            port=config.port,
+            reload=True,
+            reload_dirs=["src"],
+        )
+    else:
+        app = create_app(config)
+        uvicorn.run(app, host=config.host, port=config.port)
+
     return 0
 
 

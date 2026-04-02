@@ -1,7 +1,7 @@
 .PHONY: serve test lint fmt
 
 serve:
-	uv run python scripts/run_pipeline.py serve
+	uv run python scripts/run_pipeline.py serve --reload
 
 test:
 	uv run pytest
